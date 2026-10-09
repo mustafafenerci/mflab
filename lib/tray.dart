@@ -165,7 +165,8 @@ class TrayService {
           () => _channel.invokeMethod('quit')));
 
     await _channel.invokeMethod('setMenu', menu);
-    await _channel.invokeMethod('setCloseToTray', {'value': running.isNotEmpty});
+    await _channel.invokeMethod('setCloseToTray',
+        {'value': running.isNotEmpty || state.settings.startWithWindows});
     await _channel.invokeMethod('setTooltip', {
       'text': running.isEmpty
           ? '${AppConfig.appName} — çalışan servis yok'

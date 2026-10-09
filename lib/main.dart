@@ -9,7 +9,12 @@ import 'ui/courses_page.dart';
 import 'ui/manage_page.dart';
 import 'ui/widgets.dart';
 
-void main() => runApp(const MFLabApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Kullanıcıya özel çalışma klasörünü belirle (ayarlar da oradan okunur).
+  await AppConfig.init();
+  runApp(const MFLabApp());
+}
 
 class MFLabApp extends StatefulWidget {
   const MFLabApp({super.key});
@@ -91,13 +96,36 @@ class _ShellState extends State<Shell> {
           if (u != null && !state.updateDismissed)
             MaterialBanner(
               leading: const Icon(Icons.system_update_alt),
-              content: Text(
-                  'Yeni sürüm ${u.version} hazır.${u.notes.isEmpty ? '' : ' ${u.notes}'}'),
+              content: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                      'Yeni sürüm ${u.version} hazır.${u.notes.isEmpty ? '' : ' ${u.notes}'}'),
+                  if (state.updateStatus != null) ...[
+                    const SizedBox(height: 6),
+                    Text(state.updateStatus!,
+                        style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                  if (state.updating) ...[
+                    const SizedBox(height: 6),
+                    LinearProgressIndicator(value: state.updateProgress),
+                  ],
+                ],
+              ),
               actions: [
-                FilledButton(
+                HoverHint(
+                  message:
+                      'Yeni sürümü indirir, GitHub\'daki SHA-256 özetiyle doğrular ve kurar. '
+                      'MF Lab kısa bir süre kapanıp yeni sürümle kendiliğinden açılır; servislerin çalışmaya devam eder.',
+                  child: FilledButton(
+                      onPressed: state.updating ? null : state.installUpdate,
+                      child: const Text('Şimdi güncelle')),
+                ),
+                TextButton(
                     onPressed: () => Engine.openUrl(u.url),
-                    child: const Text('İndir')),
-                if (!u.mandatory)
+                    child: const Text('Sayfayı aç')),
+                if (!u.mandatory && !state.updating)
                   TextButton(
                       onPressed: state.dismissUpdate,
                       child: const Text('Sonra')),

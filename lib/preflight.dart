@@ -119,7 +119,26 @@ $o | ConvertTo-Json -Compress
   }
 
   /// Docker kayıt sunucusuna HTTPS ile ulaşılabiliyor mu? Herhangi bir HTTP yanıtı (401 dahil) yeterli.
+  /// MF Lab'ın kendisi bir güvenlik duvarı programınca engellenmiş olabilir; bu durumda Docker'ın
+  /// ağı yine de çalışabildiği için Windows'un curl.exe'siyle ikinci kez denenir.
   static Future<String?> _reach(String host) async {
+    final direct = await _reachDart(host);
+    if (direct == null) return null;
+    try {
+      final r = await Process.run('curl.exe', [
+        '-s', '-o', 'NUL', '-w', '%{http_code}', '--max-time', '8',
+        'https://$host/v2/',
+      ]);
+      final status = (r.stdout as String).trim();
+      if (status.isNotEmpty && status != '000') return null;
+      // 35/51/58/60: TLS / sertifika hataları
+      if ([35, 51, 58, 60].contains(r.exitCode)) return 'sertifika';
+      if (r.exitCode == 28) return 'zaman aşımı';
+    } catch (_) {}
+    return direct;
+  }
+
+  static Future<String?> _reachDart(String host) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
     try {
       final req = await client
@@ -188,10 +207,10 @@ $o | ConvertTo-Json -Compress
     final r = <CheckResult>[];
 
     r.add(f.baseDirWritable
-        ? const CheckResult(CheckLevel.ok, 'Çalışma klasörü', '${AppConfig.baseDir} yazılabilir.')
-        : const CheckResult(CheckLevel.fail, 'Çalışma klasörü',
+        ? CheckResult(CheckLevel.ok, 'Çalışma klasörü', '${AppConfig.baseDir} yazılabilir.')
+        : CheckResult(CheckLevel.fail, 'Çalışma klasörü',
             '${AppConfig.baseDir} klasörü oluşturulamıyor veya içine yazılamıyor.',
-            fix: 'Okul/laboratuvar bilgisayarıysan bilgisayar sorumlusundan C:\\MFLab klasörü için '
+            fix: 'Okul/laboratuvar bilgisayarıysan bilgisayar sorumlusundan ${AppConfig.rootDir} klasörü için '
                 'yazma izni iste. Kendi bilgisayarındaysan antivirüs programının "korumalı klasör" '
                 'ayarına MF Lab\'ı ekle.'));
 

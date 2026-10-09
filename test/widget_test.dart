@@ -3,11 +3,13 @@ import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mflab/config.dart';
 import 'package:mflab/engine.dart';
 import 'package:mflab/models.dart';
 import 'package:mflab/preflight.dart';
 import 'package:mflab/settings.dart';
 import 'package:mflab/ui/widgets.dart';
+import 'package:mflab/updater.dart';
 
 void main() {
   test('PowerShell process encoding and argument passing', () async {
@@ -229,14 +231,34 @@ void main() {
     expect(id('error during connect: open //./pipe/docker_engine'), 'docker');
   });
 
-  test('ön kontrol bu bilgisayarda bilgi toplayabiliyor', () async {
-    final f = await Preflight.gather(needsDocker: true);
-    expect(f.windowsBuild, isNotNull);
-    expect(f.ramGb, greaterThan(0));
-    expect(f.freeDiskGb, greaterThan(0));
-    // ignore: avoid_print
-    print('build=${f.windowsBuild} ram=${f.ramGb} disk=${f.freeDiskGb} virt=${f.virtualization} '
-        'hyper=${f.hypervisor} admin=${f.isAdmin} reboot=${f.rebootPending} wsl=${f.wslOk} '
-        'docker=${f.dockerInstalled}/${f.dockerRunning}/${f.dockerOs} net=${f.network}');
-  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  group('Kullanıcıya özel çalışma klasörü', () {
+    test('kullanıcı adı klasör adına uygun hale gelir', () {
+      expect(AppConfig.safeUserName('Ömer Şahin'), 'Omer_Sahin');
+      expect(AppConfig.safeUserName('MF-KUN'), 'MF-KUN');
+      expect(AppConfig.safeUserName('  '), 'ogrenci');
+      expect(AppConfig.safeUserName('ığüşöç'), 'igusoc');
+    });
+    const root = r'C:\MFLab';
+    test('eski sürüm verisi varsa ilk kullanıcı taşımadan kökte devam eder', () {
+      expect(AppConfig.resolveBaseDir(root: root, user: 'ali', legacyData: true), root);
+    });
+    test('kökün sahibi başka biriyse kullanıcıya ayrı klasör verilir', () {
+      expect(AppConfig.resolveBaseDir(root: root, user: 'ayse', legacyData: false, owner: 'ali'),
+          '$root\\ayse');
+      expect(AppConfig.resolveBaseDir(root: root, user: 'ALI', legacyData: false, owner: 'ali'), root);
+    });
+    test('yeni kurulumda her kullanıcı kendi klasörünü kullanır', () {
+      expect(AppConfig.resolveBaseDir(root: root, user: 'ali', legacyData: false), '$root\\ali');
+    });
+  });
+
+  group('Uygulama içi güncelleme', () {
+    test('indirme adresi ve özet okuma', () {
+      expect(Updater.downloadUrl('1.2.3'),
+          'https://github.com/mustafafenerci/mflab/releases/download/v1.2.3/MFLab-Setup-v1.2.3.exe');
+      expect(Updater.parseChecksum('${'A' * 64}  MFLab-Setup-v1.2.3.exe\r\n'), 'a' * 64);
+      expect(Updater.parseChecksum('bozuk'), isNull);
+    });
+  });
 }

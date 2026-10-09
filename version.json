@@ -1,6 +1,6 @@
 {
-  "version": "1.1.6",
+  "version": "1.1.7",
   "url": "https://github.com/mustafafenerci/mflab/releases/latest",
-  "notes": "Kurulum oncesi On Kontrol (Windows, RAM, disk, sanallastirma, WSL, yeniden baslatma, Docker modu, internet), yeni hata aciklamalari, tek ornek ve guvenli guncelleme.",
+  "notes": "Uygulama içinden tek tıkla güncelleme, her Windows kullanıcısına ayrı çalışma klasörü, Windows açılınca otomatik başlatma ve kaldırırken servisleri durdurma.",
   "mandatory": false
 }

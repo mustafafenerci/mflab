@@ -4,6 +4,7 @@ import '../app_state.dart';
 import '../config.dart';
 import '../engine.dart';
 import '../settings.dart';
+import 'widgets.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key, required this.state});
@@ -53,7 +54,20 @@ class AboutPage extends StatelessWidget {
                   'Ayarlar dosyası: ${AppSettings.filePath}',
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 6),
+                HoverHint(
+                  message:
+                      'Açıksa bilgisayar açıldığında MF Lab pencere açmadan saatin yanında başlar; '
+                      'servislerini oradan sağ tıklayarak yönetirsin. Pencereyi kapatınca da uygulama tepside kalır.',
+                  child: SwitchListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    value: state.settings.startWithWindows,
+                    onChanged: (v) => state.setStartWithWindows(v),
+                    title: const Text('Windows açılınca MF Lab\'ı başlat (saatin yanında)'),
+                  ),
+                ),
+                const SizedBox(height: 4),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,

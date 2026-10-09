@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'config.dart';
 
-/// Kullanıcı ayarlarını ve tercihlerini C:\MFLab\settings.json dosyasında kalıcı olarak saklar.
+/// Kullanıcı ayarlarını ve tercihlerini <çalışma klasörü>\settings.json dosyasında kalıcı olarak saklar.
 class AppSettings {
   AppSettings({
     this.themeMode = ThemeMode.system,
@@ -13,6 +13,7 @@ class AppSettings {
     this.studentNumber = '',
     this.lastCourseId,
     Map<String, String>? courseInstallDates,
+    this.startWithWindows = false,
   }) : courseInstallDates = courseInstallDates ?? {};
 
   ThemeMode themeMode;
@@ -20,6 +21,9 @@ class AppSettings {
   String studentNumber;
   String? lastCourseId;
   final Map<String, String> courseInstallDates;
+
+  /// Windows açılınca MF Lab saatin yanında (tepside) başlasın mı?
+  bool startWithWindows;
 
   static String get filePath => '${AppConfig.baseDir}\\settings.json';
 
@@ -50,6 +54,7 @@ class AppSettings {
         studentNumber: (map['studentNumber'] ?? '') as String,
         lastCourseId: map['lastCourseId'] as String?,
         courseInstallDates: dates,
+        startWithWindows: map['startWithWindows'] == true,
       );
     } catch (_) {
       return AppSettings();
@@ -75,6 +80,7 @@ class AppSettings {
         'studentNumber': studentNumber,
         'lastCourseId': lastCourseId,
         'courseInstallDates': courseInstallDates,
+        'startWithWindows': startWithWindows,
         'updatedAt': DateTime.now().toIso8601String(),
       };
 

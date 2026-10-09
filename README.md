@@ -31,6 +31,10 @@
 * 📦 **Tek Tıkla Ödev Paketleme (.ZIP):** İlgili haftanın projesini ve MariaDB/PostgreSQL veritabanı yedeğini (`veritabani.sql`) tek tıkla standart adlandırmayla (`No_AdSoyad_Ders_Proje.zip`) masaüstüne paketler.
 * 🗄️ **Hazır Eğitim Veritabanları:** Öğrenci Not Sistemi, E-Ticaret Demo ve Kütüphane Veritabanı tabloları tek tıkla veritabanınıza yüklenir.
 * 🔔 **Sistem Tepsisi (saatin yanı):** MF Lab simgesine sağ tıklayınca kurulu servisleri, durumlarını (çalışıyor/durdu) ve hızlı işlemleri (başlat/durdur, siteyi aç, VS Code, terminal) görürsün. Servisler çalışırken pencereyi kapatırsan uygulama tepsiye iner; tamamen çıkmak için menüden **Çıkış**'ı seç.
+* 🔄 **Tek Tıkla Güncelleme:** Yeni sürüm çıkınca uygulamanın üstünde "Şimdi güncelle" düğmesi görünür; dosya indirilir, GitHub'daki SHA-256 özetiyle doğrulanır ve kurulur. MF Lab kısa bir süre kapanıp yeni sürümle açılır.
+* 👥 **Ortak Laboratuvar Bilgisayarları:** Her Windows kullanıcısının projeleri `C:\MFLab\<kullanıcı>` altında ayrı tutulur ve yalnızca o kullanıcı erişebilir; aynı bilgisayarı kullanan öğrenciler birbirinin ödevini görmez. (Eski sürümden kalan veriler taşınmadan yerinde kullanılmaya devam eder.)
+* 🚀 **Windows Açılınca Başlat (isteğe bağlı):** Hakkında → Ayarlar'dan açılırsa MF Lab bilgisayar açılınca pencere açmadan saatin yanında başlar.
+* 🧹 **Temiz Kaldırma:** Kaldırırken çalışan ders servisleri durdurulur; projelerin ve veritabanlarının silinip silinmeyeceği sorulur (varsayılan: korunur).
 * 🧪 **Ön Kontrol:** Kurulumdan önce Windows sürümü, RAM, disk, BIOS sanallaştırması, WSL 2, bekleyen yeniden başlatma, Docker modu (Linux/Windows) ve Docker Hub/GitHub erişimi otomatik kontrol edilir; eksik olan Türkçe ve adım adım anlatılır. Docker yanlış moddaysa Linux moduna kendisi geçer.
 * 🩺 **Port Doktoru & Sistem Bakımı:** 63xx portlarını test ederek olası çakışmaları anında tespit eder; tek tıkla Docker disk alanını temizler.
 * 🖥️ **Masaüstü Kısayolları:** Kurulum tamamlandığında masaüstünüze doğrudan ilgili klasörü açan, VS Code'u başlatan ve phpMyAdmin/pgAdmin panellerine giden hazır kısayollar bırakılır.
@@ -39,7 +43,7 @@
 
 ---
 
-## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.6)
+## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.7)
 
 | Ders | Bileşenler | Portlar | Masaüstü Klasörü |
 | :--- | :--- | :--- | :--- |
@@ -53,7 +57,7 @@
 
 ### Yöntem 1: Kurulum Dosyası İle (Önerilen)
 1. **Setup Dosyasını İndirin:**  
-   [👉 **En Güncel Sürümü İndir (v1.1.6)**](https://github.com/mustafafenerci/mflab/releases/latest) — sayfadaki `MFLab-Setup-vX.Y.Z.exe` dosyasına tıklayın; dosya adındaki `vX.Y.Z` sürüm numarasıdır.
+   [👉 **En Güncel Sürümü İndir (v1.1.7)**](https://github.com/mustafafenerci/mflab/releases/latest) — sayfadaki `MFLab-Setup-vX.Y.Z.exe` dosyasına tıklayın; dosya adındaki `vX.Y.Z` sürüm numarasıdır.
 2. **Kurulumu Başlatın:**  
    `MFLab-Setup-vX.Y.Z.exe` dosyasını çalıştırın ve kurulum sihirbazını tamamlayın. Kurulum bitince MF Lab otomatik olarak açılır.
 3. **Dersinizi Seçin ve Kur'a Basın:**  
@@ -69,7 +73,7 @@ irm https://raw.githubusercontent.com/mustafafenerci/mflab/main/scripts/install.
 
 ### ⚠️ "Windows kişisel bilgisayarınızı korudu" Uyarısı
 
-`MFLab-Setup.exe` internetten indirilip çift tıklandığında Windows şu uyarıyı gösterebilir:
+`MFLab-Setup-vX.Y.Z.exe` internetten indirilip çift tıklandığında Windows şu uyarıyı gösterebilir:
 
 > **Windows kişisel bilgisayarınızı korudu** — Microsoft Defender SmartScreen tanınmayan bir uygulamanın başlamasını engelledi. Yayımcı: Bilinmeyen yayımcı
 
@@ -78,10 +82,10 @@ Bu bir **hata veya virüs uyarısı değildir.** MF Lab açık kaynaklıdır (ka
 **Kurulumu şöyle sürdürebilirsiniz (aşağıdakilerden biri yeterli):**
 
 1. Uyarı penceresinde **"Ek bilgi"** yazısına tıklayın, ardından çıkan **"Yine de çalıştır"** düğmesine basın.
-2. Ya da indirdiğiniz `MFLab-Setup.exe` dosyasına **sağ tıklayın → Özellikler** → en altta **"Engellemeyi kaldır"** kutusunu işaretleyip **Tamam**'a basın, sonra dosyayı normal şekilde çalıştırın.
+2. Ya da indirdiğiniz `MFLab-Setup-vX.Y.Z.exe` dosyasına **sağ tıklayın → Özellikler** → en altta **"Engellemeyi kaldır"** kutusunu işaretleyip **Tamam**'a basın, sonra dosyayı normal şekilde çalıştırın.
 3. Ya da uyarıyla hiç karşılaşmamak için yukarıdaki **Yöntem 2 (PowerShell tek komut)** ile kurun. Bu yöntemle indirilen dosyada "internetten indirildi" işareti oluşmaz.
 
-> **Güvenlik ipucu:** Kurulum dosyasını yalnızca bu deponun [Releases sayfasından](https://github.com/mustafafenerci/mflab/releases/latest) indirin. Başka bir yerden gelen `MFLab-Setup.exe` dosyalarına güvenmeyin.
+> **Güvenlik ipucu:** Kurulum dosyasını yalnızca bu deponun [Releases sayfasından](https://github.com/mustafafenerci/mflab/releases/latest) indirin. Başka bir yerden gelen `MFLab-Setup` dosyalarına güvenmeyin.
 
 ---
 
@@ -112,7 +116,7 @@ Bilgisayarınızda [Inno Setup 6](https://jrsoftware.org/isinfo.php) kurulu ise:
 # veya
 .\build_installer.bat
 ```
-Derlenen `MFLab-Setup.exe` doğrudan Masaüstünüze (`Desktop`) kopyalanacaktır.
+Derlenen `MFLab-Setup-vX.Y.Z.exe` doğrudan Masaüstünüze (`Desktop`) kopyalanacaktır.
 
 ---
 

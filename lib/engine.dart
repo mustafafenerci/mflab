@@ -174,6 +174,27 @@ class Engine {
   }
 
 
+  // ------------------------------------------------------- otomatik başlatma
+
+  static const _runKey = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
+  static const _runValue = 'MF Lab';
+
+  /// Windows açılınca MF Lab'ı saatin yanında (pencere açmadan) başlatır ya da bunu kapatır.
+  static Future<bool> setAutostart(bool enabled) async {
+    try {
+      final exe = Platform.resolvedExecutable;
+      final r = enabled
+          ? await Process.run('reg', [
+              'add', _runKey, '/v', _runValue, '/t', 'REG_SZ',
+              '/d', '"$exe" --tray', '/f',
+            ])
+          : await Process.run('reg', ['delete', _runKey, '/v', _runValue, '/f']);
+      return r.exitCode == 0 || !enabled;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // -------------------------------------------------------------- help/errs
 
   static HelpEntry? helpFor(Catalog cat, String output) {

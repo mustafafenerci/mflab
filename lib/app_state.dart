@@ -7,6 +7,7 @@ import 'engine.dart';
 import 'models.dart';
 import 'preflight.dart';
 import 'settings.dart';
+import 'updater.dart';
 
 /// Uygulamanın ortak durumu: katalog, ayarlar, kurulum günlüğü, güncelleme bilgisi.
 class AppState extends ChangeNotifier {
@@ -14,6 +15,11 @@ class AppState extends ChangeNotifier {
   UpdateInfo? update;
   bool updateDismissed = false;
   bool checkedUpdate = false;
+
+  /// Uygulama içi güncelleme: null = başlamadı, 0..1 = indiriliyor.
+  double? updateProgress;
+  String? updateStatus;
+  bool updating = false;
 
   AppSettings settings = AppSettings();
 
@@ -41,6 +47,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setStartWithWindows(bool value) async {
+    final ok = await Engine.setAutostart(value);
+    if (!ok) return;
+    settings.startWithWindows = value;
+    await settings.save();
+    notifyListeners();
+  }
+
   void setLastCourse(String courseId) {
     if (settings.lastCourseId != courseId) {
       settings.lastCourseId = courseId;
@@ -59,6 +73,8 @@ class AppState extends ChangeNotifier {
   Future<void> init() async {
     settings = await AppSettings.load();
     await Engine.loadPortMaps();
+    // Uygulama güncellenip yolu değiştiyse otomatik başlatma kaydını tazele.
+    if (settings.startWithWindows) await Engine.setAutostart(true);
     await Engine.refreshPath();
     catalog = await Catalog.load();
     notifyListeners();
@@ -75,6 +91,37 @@ class AppState extends ChangeNotifier {
   void dismissUpdate() {
     updateDismissed = true;
     notifyListeners();
+  }
+
+  /// Yeni sürümü indirir, doğrular ve sessizce kurar (uygulama kapanıp yeni sürümle açılır).
+  Future<void> installUpdate() async {
+    final u = update;
+    if (u == null || updating) return;
+    updating = true;
+    updateProgress = 0;
+    updateStatus = 'İndiriliyor...';
+    notifyListeners();
+    try {
+      final file = await Updater.download(u.version, onProgress: (p) {
+        updateProgress = p;
+        updateStatus = 'İndiriliyor... %${(p * 100).round()}';
+        notifyListeners();
+      });
+      updateStatus = 'Dosya doğrulanıyor...';
+      updateProgress = null;
+      notifyListeners();
+      if (!await Updater.verify(u.version, file)) {
+        throw StateError('İndirilen dosya doğrulanamadı (SHA-256 uyuşmuyor).');
+      }
+      updateStatus = 'Kuruluyor... MF Lab birazdan kapanıp yeni sürümle açılacak.';
+      notifyListeners();
+      await Updater.runInstallerAndQuit(file);
+    } catch (e) {
+      updating = false;
+      updateProgress = null;
+      updateStatus = 'Güncelleme yapılamadı: $e. "Sayfayı aç" ile elle indirebilirsin.';
+      notifyListeners();
+    }
   }
 
   void log(String m) {
