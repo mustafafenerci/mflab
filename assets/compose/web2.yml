@@ -3,7 +3,7 @@ services:
   web:
     image: ghcr.io/mustafafenerci/mflab-php-web:latest
     build: ./php-web
-    ports: ["8080:80"]
+    ports: ["6380:80"]
     volumes: ["${WORKSPACE}:/var/www/html"]
     depends_on:
       db:
@@ -14,7 +14,7 @@ services:
     environment:
       MARIADB_ROOT_PASSWORD: root
       MARIADB_DATABASE: mflab
-    ports: ["3306:3306"]
+    ports: ["6306:3306"]
     volumes: ["db_data:/var/lib/mysql"]
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -28,7 +28,7 @@ services:
       PMA_HOST: db
       PMA_USER: root
       PMA_PASSWORD: root
-    ports: ["8081:80"]
+    ports: ["6381:80"]
     depends_on: [db]
     restart: unless-stopped
 volumes:

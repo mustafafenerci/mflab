@@ -5,10 +5,10 @@
   "compose": "assets/compose/web2.yml",
   "buildContext": "docker/php-web/Dockerfile",
   "workspaceName": "htdocs",
-  "ports": [8080, 8081, 3306],
+  "ports": [6380, 6381, 6306],
   "links": [
-    {"name": "Web Sitem", "url": "http://localhost:8080"},
-    {"name": "phpMyAdmin", "url": "http://localhost:8081"}
+    {"name": "Web Sitem", "url": "http://localhost:6380"},
+    {"name": "phpMyAdmin", "url": "http://localhost:6381"}
   ],
   "actions": [
     {
@@ -16,7 +16,7 @@
       "service": "web",
       "prompt": "Proje adı (küçük harf, boşluksuz)",
       "command": "composer create-project laravel/laravel {name}",
-      "afterInfo": "Projen htdocs/{name} klasöründe. Tarayıcıda: http://localhost:8080/{name}/public"
+      "afterInfo": "Projen htdocs/{name} klasöründe. Tarayıcıda: http://localhost:6380/{name}/public"
     }
   ],
   "why": "Web sitelerini bilgisayarında çalıştırmak için bir web sunucusuna (Apache), PHP yorumlayıcısına ve veritabanına (MariaDB) ihtiyacın var. phpMyAdmin ile veritabanını tarayıcıdan yönetirsin. Composer, Git ve Node.js hazır gelir; Laravel için ek kurulum gerekmez. Hepsi Docker konteynerlerinde çalışır, bilgisayarını kirletmez.",
@@ -27,5 +27,5 @@
     "Konteynerler başlatılıyor",
     "Masaüstü kısayolları oluşturuluyor"
   ],
-  "info": "Web: http://localhost:8080 | phpMyAdmin: http://localhost:8081 | MariaDB: localhost:3306 (kullanıcı: root, şifre: root, veritabanı: mflab) | PHP'den bağlanırken sunucu adı: db"
+  "info": "Web: http://localhost:6380 | phpMyAdmin: http://localhost:6381 | MariaDB: localhost:6306 (kullanıcı: root, şifre: root, veritabanı: mflab) | PHP'den bağlanırken sunucu adı: db"
 }
