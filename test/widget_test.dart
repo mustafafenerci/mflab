@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mflab/engine.dart';
 import 'package:mflab/models.dart';
 import 'package:mflab/settings.dart';
+import 'package:mflab/ui/widgets.dart';
 
 void main() {
   test('PowerShell process encoding and argument passing', () async {
@@ -112,6 +114,27 @@ void main() {
     );
     expect(laravel.isLaravel, isTrue);
   });
+
+  testWidgets('HoverHint açıklaması ancak ~4 sn bekleyince görünür',
+      (tester) async {
+    const msg = 'Bu düğmenin uzun açıklaması';
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: HoverHint(message: msg, child: Text('Düğme')),
+        ),
+      ),
+    ));
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await gesture.moveTo(tester.getCenter(find.text('Düğme')));
+
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text(msg), findsNothing);
+
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text(msg), findsOneWidget);
+  });
 }
-
-

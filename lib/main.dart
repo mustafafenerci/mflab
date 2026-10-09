@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_state.dart';
 import 'config.dart';
 import 'engine.dart';
+import 'tray.dart';
 import 'ui/about_page.dart';
 import 'ui/courses_page.dart';
 import 'ui/manage_page.dart';
@@ -19,15 +20,18 @@ class MFLabApp extends StatefulWidget {
 
 class _MFLabAppState extends State<MFLabApp> {
   final state = AppState();
+  late final tray = TrayService(state);
 
   @override
   void initState() {
     super.initState();
     state.init();
+    tray.init();
   }
 
   @override
   void dispose() {
+    tray.dispose();
     state.dispose();
     super.dispose();
   }

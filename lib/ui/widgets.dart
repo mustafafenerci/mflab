@@ -205,3 +205,29 @@ class _HelpCard extends StatelessWidget {
     );
   }
 }
+
+/// Üzerine gelip birkaç saniye bekleyince açıklama gösteren sarmalayıcı.
+/// Hızlı açılan, kısa ipuçları için normal `tooltip:` kullanılır; bu, uzun açıklamalar içindir.
+class HoverHint extends StatelessWidget {
+  const HoverHint({super.key, required this.message, required this.child});
+  final String message;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: message,
+      waitDuration: const Duration(seconds: 4),
+      showDuration: const Duration(seconds: 12),
+      constraints: const BoxConstraints(maxWidth: 340),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.inverseSurface,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      textStyle: TextStyle(color: cs.onInverseSurface, fontSize: 13, height: 1.35),
+      child: child,
+    );
+  }
+}

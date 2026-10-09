@@ -30,6 +30,7 @@
 * 🚀 **Çoklu Proje & Haftalık Ders Portalı:** `htdocs` içindeki tüm haftalık ödev ve alt projeler dinamik MF Lab Öğrenci Portalı (`index.php`) ve masaüstü arayüzünden tek tıkla listelenir, taranır ve tarayıcıda/VS Code'da açılır.
 * 📦 **Tek Tıkla Ödev Paketleme (.ZIP):** İlgili haftanın projesini ve MariaDB/PostgreSQL veritabanı yedeğini (`veritabani.sql`) tek tıkla standart adlandırmayla (`No_AdSoyad_Ders_Proje.zip`) masaüstüne paketler.
 * 🗄️ **Hazır Eğitim Veritabanları:** Öğrenci Not Sistemi, E-Ticaret Demo ve Kütüphane Veritabanı tabloları tek tıkla veritabanınıza yüklenir.
+* 🔔 **Sistem Tepsisi (saatin yanı):** MF Lab simgesine sağ tıklayınca kurulu servisleri, durumlarını (çalışıyor/durdu) ve hızlı işlemleri (başlat/durdur, siteyi aç, VS Code, terminal) görürsün. Servisler çalışırken pencereyi kapatırsan uygulama tepsiye iner; tamamen çıkmak için menüden **Çıkış**'ı seç.
 * 🩺 **Port Doktoru & Sistem Bakımı:** 63xx portlarını test ederek olası çakışmaları anında tespit eder; tek tıkla Docker disk alanını temizler.
 * 🖥️ **Masaüstü Kısayolları:** Kurulum tamamlandığında masaüstünüze doğrudan ilgili klasörü açan, VS Code'u başlatan ve phpMyAdmin/pgAdmin panellerine giden hazır kısayollar bırakılır.
 * 🔍 **Pedagojik ve Anlaşılır:** Her paketin yanında *"Bu yazılım neden kuruluyor?"* açıklaması bulunur. Hata durumunda neden kaynaklandığı ve çözüm yolu gösterilir.
@@ -37,7 +38,7 @@
 
 ---
 
-## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.3)
+## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.4)
 
 | Ders | Bileşenler | Portlar | Masaüstü Klasörü |
 | :--- | :--- | :--- | :--- |
@@ -51,7 +52,7 @@
 
 ### Yöntem 1: Kurulum Dosyası İle (Önerilen)
 1. **Setup Dosyasını İndirin:**  
-   [👉 **En Güncel Sürümü İndir (v1.1.3)**](https://github.com/mustafafenerci/mflab/releases/latest) — sayfadaki `MFLab-Setup-vX.Y.Z.exe` dosyasına tıklayın; dosya adındaki `vX.Y.Z` sürüm numarasıdır.
+   [👉 **En Güncel Sürümü İndir (v1.1.4)**](https://github.com/mustafafenerci/mflab/releases/latest) — sayfadaki `MFLab-Setup-vX.Y.Z.exe` dosyasına tıklayın; dosya adındaki `vX.Y.Z` sürüm numarasıdır.
 2. **Kurulumu Başlatın:**  
    `MFLab-Setup-vX.Y.Z.exe` dosyasını çalıştırın ve kurulum sihirbazını tamamlayın. Kurulum bitince MF Lab otomatik olarak açılır.
 3. **Dersinizi Seçin ve Kur'a Basın:**  

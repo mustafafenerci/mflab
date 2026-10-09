@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../engine.dart';
@@ -99,6 +100,25 @@ class _ManagePageState extends State<ManagePage> {
     }
   }
 
+  Widget _tool({
+    required IconData icon,
+    required String label,
+    required String hint,
+    required VoidCallback? onPressed,
+  }) =>
+      HoverHint(
+        message: hint,
+        child: OutlinedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 16),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+              textStyle: const TextStyle(fontSize: 13)),
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<_Entry>>(
@@ -108,65 +128,109 @@ class _ManagePageState extends State<ManagePage> {
           return const Center(child: CircularProgressIndicator());
         }
         final items = snap.data!;
+        final cs = Theme.of(context).colorScheme;
+        final runningCount = items.where((e) => e.running).length;
+        final hasDb = items.any((e) =>
+            e.running && (e.pkg.id == 'web2-stack' || e.pkg.id == 'vtys-stack'));
         return ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
           children: [
-            Row(
+            Wrap(
+              spacing: 6,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text('Yönetim',
-                    style: Theme.of(context).textTheme.headlineSmall),
-                const Spacer(),
-                IconButton(
-                    tooltip: 'Yenile',
-                    onPressed: s.busy ? null : reload,
-                    icon: const Icon(Icons.refresh)),
-                FilledButton.tonalIcon(
-                  onPressed: s.busy || items.every((e) => !e.running)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Yönetim',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      Text(
+                          items.isEmpty
+                              ? 'Henüz kurulu servis yok'
+                              : '${items.length} servis · $runningCount çalışıyor',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+                _tool(
+                  icon: Icons.health_and_safety_outlined,
+                  label: 'Port Doktoru',
+                  hint:
+                      'MF Lab\'ın kullandığı portların (6380, 6381, 6306 ...) dolu mu boş mu olduğunu kontrol eder. Site açılmıyorsa ilk burayı dene.',
+                  onPressed: s.busy ? null : () => _task(() => Engine.checkPorts(s.log)),
+                ),
+                if (hasDb)
+                  _tool(
+                    icon: Icons.dataset_outlined,
+                    label: 'Örnek Veritabanı',
+                    hint:
+                        'Eğitim için hazır tablolar ve örnek veriler yükler (öğrenci notları, e-ticaret, kütüphane). Alıştırma yapmak için idealdir.',
+                    onPressed: s.busy ? null : () => _showSampleDbDialog(context, items),
+                  ),
+                _tool(
+                  icon: Icons.cleaning_services_outlined,
+                  label: 'Docker Temizliği',
+                  hint:
+                      'Kullanılmayan Docker imajlarını ve önbellekleri silip disk alanı açar. Çalışan servislerine dokunmaz.',
+                  onPressed: s.busy ? null : () => _task(() => Engine.cleanDocker(s.log)),
+                ),
+                _tool(
+                  icon: Icons.stop_circle_outlined,
+                  label: 'Hepsini durdur',
+                  hint:
+                      'Çalışan tüm servisleri durdurur. Dosyaların ve veritabanın silinmez; Başlat ile devam edersin.',
+                  onPressed: s.busy || runningCount == 0
                       ? null
                       : () => _task(() async {
                             for (final e in items.where((e) => e.running)) {
                               await Engine.stop(e.course, e.pkg, s.log);
                             }
                           }),
-                  icon: const Icon(Icons.stop_circle_outlined),
-                  label: const Text('Hepsini durdur'),
+                ),
+                HoverHint(
+                  message: 'Listeyi ve servislerin çalışıp çalışmadığını yeniden okur.',
+                  child: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 20,
+                      onPressed: s.busy ? null : reload,
+                      icon: const Icon(Icons.refresh)),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(
-                'Bu uygulamayı kapatsan bile servisler arka planda çalışmaya devam eder. Durdurmak için buradaki düğmeleri kullan.',
-                style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: s.busy ? null : () => _task(() => Engine.checkPorts(s.log)),
-                  icon: const Icon(Icons.health_and_safety_outlined, size: 18),
-                  label: const Text('Port Doktoru'),
-                ),
-                if (items.any((e) => e.running && (e.pkg.id == 'web2-stack' || e.pkg.id == 'vtys-stack')))
-                  OutlinedButton.icon(
-                    onPressed: s.busy ? null : () => _showSampleDbDialog(context, items),
-                    icon: const Icon(Icons.dataset_outlined, size: 18),
-                    label: const Text('Örnek Veritabanı Yükle'),
-                  ),
-                OutlinedButton.icon(
-                  onPressed: s.busy ? null : () => _task(() => Engine.cleanDocker(s.log)),
-                  icon: const Icon(Icons.cleaning_services_outlined, size: 18),
-                  label: const Text('Docker Temizliği'),
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 10),
+              child: Text(
+                  'Bu uygulamayı kapatsan bile servisler arka planda çalışmaya devam eder.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant)),
             ),
-            const SizedBox(height: 16),
             if (items.isEmpty)
-              const Card(
+              Card(
+                margin: EdgeInsets.zero,
                 child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text(
-                      'Henüz kurulu bir servis yok. "Dersler" sayfasından dersini seçip kurulumu başlat.'),
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Icon(Icons.dns_outlined, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                            'Henüz kurulu bir servis yok. "Dersler" sayfasından dersini seçip kurulumu başlat.'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             for (final e in items) _ServiceCard(entry: e, page: this),
@@ -182,145 +246,276 @@ class _ServiceCard extends StatelessWidget {
   final _Entry entry;
   final _ManagePageState page;
 
+  bool get _isDb =>
+      entry.running &&
+      (entry.pkg.id == 'web2-stack' || entry.pkg.id == 'vtys-stack');
+
+  /// Küçük, açıklamalı (4 sn bekleyince ipucu gösteren) düğme.
+  Widget _btn({
+    required IconData icon,
+    required String label,
+    required String hint,
+    required VoidCallback? onPressed,
+    _Kind kind = _Kind.outlined,
+  }) {
+    final ic = Icon(icon, size: 16);
+    final txt = Text(label);
+    const pad = EdgeInsets.symmetric(horizontal: 10);
+    const density = VisualDensity(horizontal: -2, vertical: -2);
+    const text = TextStyle(fontSize: 13);
+    final Widget b;
+    switch (kind) {
+      case _Kind.filled:
+        b = FilledButton.icon(
+            onPressed: onPressed,
+            icon: ic,
+            label: txt,
+            style: FilledButton.styleFrom(
+                padding: pad, visualDensity: density, textStyle: text));
+      case _Kind.tonal:
+        b = FilledButton.tonalIcon(
+            onPressed: onPressed,
+            icon: ic,
+            label: txt,
+            style: FilledButton.styleFrom(
+                padding: pad, visualDensity: density, textStyle: text));
+      case _Kind.outlined:
+        b = OutlinedButton.icon(
+            onPressed: onPressed,
+            icon: ic,
+            label: txt,
+            style: OutlinedButton.styleFrom(
+                padding: pad, visualDensity: density, textStyle: text));
+    }
+    return HoverHint(message: hint, child: b);
+  }
+
+  Widget _sep(BuildContext context) => SizedBox(
+        height: 22,
+        child: VerticalDivider(
+            width: 10, color: Theme.of(context).colorScheme.outlineVariant),
+      );
+
   @override
   Widget build(BuildContext context) {
     final e = entry;
     final s = page.s;
     final busy = s.busy;
+    final cs = Theme.of(context).colorScheme;
+    final running = e.running;
+    final info = Engine.mapText(e.course.id, e.pkg.id, e.pkg.info);
+    final infoLines = info
+        .split('|')
+        .map((x) => x.trim())
+        .where((x) => x.isNotEmpty)
+        .toList();
+    final links = running ? e.pkg.links : const <PackageLink>[];
+    final actions = running ? e.pkg.actions : const <PackageAction>[];
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 14),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      clipBehavior: Clip.antiAlias,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (busy) const LinearProgressIndicator(minHeight: 2),
+          // ---------------------------------------------------------- başlık
+          Container(
+            color: (running ? Colors.green : cs.outline).withValues(alpha: 0.08),
+            padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+            child: Row(
               children: [
-                Icon(courseIcon(e.course.icon)),
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(courseIcon(e.course.icon),
+                      size: 18, color: cs.onPrimaryContainer),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(e.course.name,
-                          style: Theme.of(context).textTheme.titleMedium),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700)),
                       Text(e.pkg.name,
-                          style: Theme.of(context).textTheme.bodySmall),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant)),
                     ],
                   ),
                 ),
-                Chip(
-                  avatar: Icon(Icons.circle,
-                      size: 12,
-                      color: e.running ? Colors.green : Colors.redAccent),
-                  label: Text(e.running ? 'Çalışıyor' : 'Durdu'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (!e.running)
-                  FilledButton.icon(
+                _StatusPill(running: running),
+                const SizedBox(width: 10),
+                if (!running)
+                  _btn(
+                    icon: Icons.play_arrow_rounded,
+                    label: 'Başlat',
+                    kind: _Kind.filled,
+                    hint:
+                        'Bu dersin servislerini (Apache, MariaDB, phpMyAdmin) başlatır. İlk açılış 10–20 saniye sürebilir.',
                     onPressed: busy
                         ? null
                         : () => page._task(
                             () => Engine.start(e.course, e.pkg, s.log)),
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Başlat'),
                   )
                 else
-                  FilledButton.tonalIcon(
+                  _btn(
+                    icon: Icons.stop_rounded,
+                    label: 'Durdur',
+                    kind: _Kind.tonal,
+                    hint:
+                        'Servisleri durdurur. Dosyaların ve veritabanın silinmez; Başlat\'a basınca kaldığın yerden devam edersin.',
                     onPressed: busy
                         ? null
                         : () => page._task(
                             () => Engine.stop(e.course, e.pkg, s.log)),
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Durdur'),
                   ),
-                if (e.running)
-                  for (final l in e.pkg.links)
-                    OutlinedButton.icon(
-                      onPressed: () => Engine.openUrl(
-                          Engine.mapText(e.course.id, e.pkg.id, l.url)),
-                      icon: const Icon(Icons.public, size: 18),
-                      label: Text(l.name),
+                PopupMenuButton<String>(
+                  tooltip: 'Daha fazla',
+                  enabled: !busy,
+                  icon: const Icon(Icons.more_vert, size: 20),
+                  onSelected: (_) => _showCourseUninstallDialog(context, e.course),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'remove',
+                      child: ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.delete_sweep_outlined, color: cs.error),
+                        title: Text('Ders Bitti / Kaldır',
+                            style: TextStyle(color: cs.error)),
+                        subtitle: const Text(
+                            'Servisleri ve konteynerleri kaldırır.\nKlasörü silmek isteğe bağlıdır.'),
+                      ),
                     ),
-                OutlinedButton.icon(
-                  onPressed: () =>
-                      Engine.openFolder(Engine.workspaceDir(e.course)),
-                  icon: const Icon(Icons.folder_open, size: 18),
-                  label: const Text('Klasör'),
+                  ],
                 ),
-                OutlinedButton.icon(
+              ],
+            ),
+          ),
+          // ---------------------------------------------------------- düğmeler
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (final l in links)
+                  _btn(
+                    icon: Icons.public,
+                    label: l.name,
+                    kind: _Kind.tonal,
+                    hint:
+                        '${l.name} sayfasını tarayıcıda açar: ${Engine.mapText(e.course.id, e.pkg.id, l.url)}',
+                    onPressed: () => Engine.openUrl(
+                        Engine.mapText(e.course.id, e.pkg.id, l.url)),
+                  ),
+                if (links.isNotEmpty) _sep(context),
+                _btn(
+                  icon: Icons.code,
+                  label: 'VS Code',
+                  hint:
+                      'Çalışma klasörünü VS Code\'da açar. Dosyayı kaydedip tarayıcıda sayfayı yenilemen yeterli.',
                   onPressed: () =>
                       Engine.openInVsCode(Engine.workspaceDir(e.course)),
-                  icon: const Icon(Icons.code, size: 18),
-                  label: const Text('VS Code'),
                 ),
-                FilledButton.tonalIcon(
+                _btn(
+                  icon: Icons.folder_open,
+                  label: 'Klasör',
+                  hint:
+                      'Kodlarını koyduğun çalışma klasörünü Dosya Gezgini\'nde açar.',
+                  onPressed: () =>
+                      Engine.openFolder(Engine.workspaceDir(e.course)),
+                ),
+                _btn(
+                  icon: Icons.folder_copy_outlined,
+                  label: 'Projelerim',
+                  kind: _Kind.tonal,
+                  hint:
+                      'Alt klasörlerdeki projelerini ve haftalık ödevlerini listeler. Yeni proje açabilir ve tarayıcıda çalıştırabilirsin.',
                   onPressed: busy ? null : () => _showProjectsDialog(context),
-                  icon: const Icon(Icons.folder_copy_outlined, size: 18),
-                  label: const Text('Projelerim & Haftalar'),
                 ),
-                OutlinedButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () => page._task(
-                          () => Engine.showLogs(e.course, e.pkg, s.log)),
-                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                  label: const Text('Loglar'),
-                ),
-                if (e.running)
-                  OutlinedButton.icon(
+                if (running)
+                  _btn(
+                    icon: Icons.terminal,
+                    label: 'Terminal',
+                    hint:
+                        'Konteynerin içinde komut satırı (bash) açar. composer, php ve npm komutlarını burada çalıştırırsın.',
                     onPressed: () => Engine.openContainerTerminal(e.course, e.pkg),
-                    icon: const Icon(Icons.terminal, size: 18),
-                    label: const Text('Terminal'),
                   ),
-                if (e.running && (e.pkg.id == 'web2-stack' || e.pkg.id == 'vtys-stack')) ...[
-                  OutlinedButton.icon(
+                for (final a in actions)
+                  _btn(
+                    icon: Icons.auto_awesome,
+                    label: a.label,
+                    hint:
+                        '${a.label}: konteynerin içinde hazır bir komut çalıştırır${a.prompt == null ? '' : ' (önce ${a.prompt!.split('(').first.trim().toLowerCase()} sorulur)'}.',
+                    onPressed: busy ? null : () => _runAction(context, a),
+                  ),
+                if (_isDb) ...[
+                  _sep(context),
+                  _btn(
+                    icon: Icons.backup_outlined,
+                    label: 'Yedek Al',
+                    hint:
+                        'Veritabanındaki tabloları .sql dosyası olarak yedekler. Bir şey bozulursa geri yükleyebilirsin.',
                     onPressed: busy
                         ? null
                         : () => page._task(() =>
                             Engine.backupDatabase(e.course, e.pkg, s.log)),
-                    icon: const Icon(Icons.backup_outlined, size: 18),
-                    label: const Text('Yedek Al (.sql)'),
                   ),
-                  OutlinedButton.icon(
+                  _btn(
+                    icon: Icons.restore_page_outlined,
+                    label: 'İçe Aktar',
+                    hint:
+                        'Daha önce aldığın ya da hocanın verdiği bir .sql dosyasını veritabanına yükler.',
                     onPressed: busy ? null : () => _importSql(context),
-                    icon: const Icon(Icons.restore_page_outlined, size: 18),
-                    label: const Text('İçe Aktar (.sql)'),
                   ),
                 ],
-                OutlinedButton.icon(
+                _sep(context),
+                _btn(
+                  icon: Icons.archive_outlined,
+                  label: 'Ödevi Paketle',
+                  hint:
+                      'Projenin kodunu ve veritabanı yedeğini adın ve numaranla tek bir .zip dosyası yapıp Masaüstüne koyar. Teslim için hazırdır.',
                   onPressed: busy ? null : () => _exportHomeworkDialog(context),
-                  icon: const Icon(Icons.archive_outlined, size: 18),
-                  label: const Text('Ödevi Paketle (.zip)'),
                 ),
-                if (e.running)
-                  for (final a in e.pkg.actions)
-                    OutlinedButton.icon(
-                      onPressed: busy ? null : () => _runAction(context, a),
-                      icon: const Icon(Icons.auto_awesome, size: 18),
-                      label: Text(a.label),
-                    ),
-                FilledButton.tonalIcon(
-                  style: FilledButton.styleFrom(
-                    foregroundColor: Theme.of(context).colorScheme.error,
-                  ),
-                  onPressed: busy ? null : () => _showCourseUninstallDialog(context, e.course),
-                  icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-                  label: const Text('Ders Bitti / Kaldır'),
+                _btn(
+                  icon: Icons.receipt_long_outlined,
+                  label: 'Loglar',
+                  hint:
+                      'Servislerin son çıktılarını alttaki günlük panelinde gösterir. Bir şey çalışmıyorsa hatayı burada ararsın.',
+                  onPressed: busy
+                      ? null
+                      : () => page._task(
+                          () => Engine.showLogs(e.course, e.pkg, s.log)),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            SelectableText(Engine.mapText(e.course.id, e.pkg.id, e.pkg.info),
-                style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
+          ),
+          // -------------------------------------------- bağlantı bilgileri
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Icon(Icons.key_outlined, size: 14, color: cs.onSurfaceVariant),
+                for (final line in infoLines) _InfoChip(text: line),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -813,5 +1008,68 @@ class _ServiceCard extends StatelessWidget {
             log: page.s.log,
           ));
     }
+  }
+}
+
+enum _Kind { filled, tonal, outlined }
+
+/// Tıklayınca panoya kopyalanan küçük bilgi etiketi.
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return HoverHint(
+      message: 'Kopyalamak için tıkla.',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () async {
+          await Clipboard.setData(ClipboardData(text: text));
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                duration: const Duration(seconds: 2),
+                content: Text('Kopyalandı: $text')));
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.running});
+  final bool running;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = running ? Colors.green : Theme.of(context).colorScheme.outline;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.circle, size: 8, color: color),
+          const SizedBox(width: 6),
+          Text(running ? 'Çalışıyor' : 'Durdu',
+              style: TextStyle(
+                  fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+        ],
+      ),
+    );
   }
 }
