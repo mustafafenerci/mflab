@@ -29,8 +29,8 @@ class Engine {
     return Process.run(cmd, args,
         workingDirectory: cwd,
         runInShell: true,
-        stdoutEncoding: utf8,
-        stderrEncoding: utf8);
+        stdoutEncoding: systemEncoding,
+        stderrEncoding: systemEncoding);
   }
 
   /// Komutu çalıştırır, çıktıyı canlı olarak [log]'a akıtır ve tüm çıktıyı döner.
@@ -43,11 +43,11 @@ class Engine {
     for (final s in [proc.stdout, proc.stderr]) {
       final c = Completer<void>();
       done.add(c.future);
-      s.transform(const Utf8Decoder(allowMalformed: true)).listen((d) {
+      s.transform(systemEncoding.decoder).listen((d) {
         buf.write(d);
         final t = d.trim();
         if (t.isNotEmpty) log(t);
-      }, onDone: c.complete);
+      }, onDone: c.complete, onError: (_) => c.complete());
     }
     await Future.wait(done);
     final code = await proc.exitCode;
@@ -78,7 +78,7 @@ class Engine {
 
   static Future<void> openInVsCode(String path) async {
     await Directory(path).create(recursive: true);
-    await run('code', [_q(path)]);
+    await run('code', [path]);
   }
 
   static String _q(String s) => '"$s"';
@@ -304,7 +304,7 @@ class Engine {
       '-ExecutionPolicy',
       'Bypass',
       '-File',
-      _q(tmp.path)
+      tmp.path
     ]);
     if (r.exitCode == 0) {
       log('✔ Masaüstündeki "${course.name}" kısayolları temizlendi.');
@@ -435,7 +435,7 @@ class Engine {
       '-ExecutionPolicy',
       'Bypass',
       '-File',
-      _q(tmp.path)
+      tmp.path
     ]);
     log(r.exitCode == 0
         ? '✔ Masaüstüne "MF Lab - ${course.name}" klasörü ve kısayollar eklendi.'
