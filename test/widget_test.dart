@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mflab/engine.dart';
+import 'package:mflab/models.dart';
 import 'package:mflab/settings.dart';
 
 void main() {
@@ -89,6 +90,27 @@ void main() {
     expect(restored.studentNumber, '123456789');
     expect(restored.lastCourseId, 'web-programlama-2');
     expect(restored.courseInstallDates['web-programlama-2'], '2026-10-09T05:00:00');
+  });
+
+  test('ProjectItem creation and properties', () {
+    final now = DateTime.now();
+    final p = ProjectItem(
+      name: 'hafta1_giris',
+      path: 'C:\\MFLab\\htdocs\\hafta1_giris',
+      modified: now,
+      isLaravel: false,
+    );
+    expect(p.name, 'hafta1_giris');
+    expect(p.isLaravel, isFalse);
+    expect(p.modified, now);
+
+    final laravel = ProjectItem(
+      name: 'blog_projesi',
+      path: 'C:\\MFLab\\htdocs\\blog_projesi',
+      modified: now,
+      isLaravel: true,
+    );
+    expect(laravel.isLaravel, isTrue);
   });
 }
 

@@ -194,13 +194,8 @@ class Engine {
   static Future<void> _seedWorkspace(Course c, String ws) async {
     if (c.workspaceName == 'htdocs') {
       final f = File('$ws\\index.php');
-      if (!await f.exists() && (await Directory(ws).list().isEmpty)) {
-        await f.writeAsString('<?php\n'
-            'echo "<h1>MF Lab çalışıyor!</h1>";\n'
-            'echo "<p>PHP sürümü: " . phpversion() . "</p>";\n'
-            r'try { $pdo = new PDO("mysql:host=db;dbname=mflab", "root", "root"); '
-            'echo "<p>MariaDB bağlantısı: başarılı ✔</p>"; } '
-            'catch (Exception \$e) { echo "<p>MariaDB bağlantısı: " . \$e->getMessage() . "</p>"; }\n');
+      if (!await f.exists()) {
+        await f.writeAsString(_htdocsPortalHtml);
       }
     } else if (c.workspaceName == 'proje') {
       final f = File('$ws\\index.html');
@@ -211,6 +206,546 @@ class Engine {
       }
     }
   }
+
+  // ----------------------------------------------------------- projects & assignments
+
+  /// Çalışma alanındaki (htdocs / proje) alt klasörleri listeler.
+  static Future<List<ProjectItem>> getProjects(Course c) async {
+    final ws = Directory(workspaceDir(c));
+    if (!await ws.exists()) return [];
+    final items = <ProjectItem>[];
+    try {
+      await for (final entity in ws.list(followLinks: false)) {
+        if (entity is Directory) {
+          final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
+          if (name.startsWith('.')) continue;
+          final stat = await entity.stat();
+          final isLaravel = await File('${entity.path}\\public\\index.php').exists();
+          items.add(ProjectItem(
+            name: name,
+            path: entity.path,
+            modified: stat.modified,
+            isLaravel: isLaravel,
+          ));
+        }
+      }
+    } catch (_) {}
+    items.sort((a, b) => b.modified.compareTo(a.modified));
+    return items;
+  }
+
+  /// Yeni proje veya haftalık ödev klasörü oluşturur.
+  static Future<String> createProject({
+    required Course course,
+    required String projectName,
+    required String template, // 'blank', 'crud', 'laravel'
+    required Log log,
+  }) async {
+    final clean = projectName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_').trim();
+    if (clean.isEmpty) throw ArgumentError('Geçersiz proje adı');
+    final ws = workspaceDir(course);
+    final targetDir = Directory('$ws\\$clean');
+    if (await targetDir.exists()) {
+      throw StateError('"$clean" adında bir proje zaten var.');
+    }
+    await targetDir.create(recursive: true);
+
+    if (template == 'crud') {
+      final f = File('${targetDir.path}\\index.php');
+      await f.writeAsString(r'''<?php
+// MF Lab - Veritabanı (CRUD) Başlangıç Şablonu
+$host = 'db';
+$db   = 'mflab';
+$user = 'root';
+$pass = 'root';
+$charset = 'utf8mb4';
+
+$dsn = "mysql:host=$host;dbname=$db;charset=$charset";
+$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+];
+
+try {
+    $pdo = new PDO($dsn, $user, $pass, $options);
+    $pdo->exec("CREATE TABLE IF NOT EXISTS notlar_demo (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        baslik VARCHAR(100) NOT NULL,
+        tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+    
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['baslik'])) {
+        $stmt = $pdo->prepare("INSERT INTO notlar_demo (baslik) VALUES (?)");
+        $stmt->execute([trim($_POST['baslik'])]);
+        header("Location: index.php");
+        exit;
+    }
+    
+    $veriler = $pdo->query("SELECT * FROM notlar_demo ORDER BY id DESC")->fetchAll();
+} catch (PDOException $e) {
+    die("Veritabanı bağlantı hatası: " . $e->getMessage());
+}
+?>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>CRUD Örneği</title>
+  <style>
+    body { font-family: sans-serif; background: #f1f5f9; padding: 30px; }
+    .card { background: #fff; max-width: 600px; margin: 0 auto; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    input[type=text] { width: 70%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; }
+    button { padding: 8px 16px; background: #0284c7; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    ul { list-style: none; padding: 0; margin-top: 20px; }
+    li { padding: 10px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>✔ MariaDB Veritabanı CRUD Şablonu</h2>
+    <p>Bağlantı durumu: <b>Başarılı (db:3306)</b></p>
+    <hr style="margin: 16px 0; border: 0; border-top: 1px solid #e2e8f0;">
+    <form method="POST">
+      <input type="text" name="baslik" placeholder="Yeni bir not yazın..." required>
+      <button type="submit">Ekle</button>
+    </form>
+    <ul>
+      <?php foreach ($veriler as $row): ?>
+        <li><span><?= htmlspecialchars($row['baslik']) ?></span> <small style="color:#64748b;"><?= $row['tarih'] ?></small></li>
+      <?php endforeach; ?>
+    </ul>
+    <p style="margin-top: 20px;"><a href="../">← MF Lab Portalına Dön</a></p>
+  </div>
+</body>
+</html>
+''');
+    } else if (template == 'laravel') {
+      log('Laravel projesi kuruluyor (birkaç dakika sürebilir)...');
+      await targetDir.delete();
+      final stack = '${courseDir(course)}\\.stack\\web2-stack';
+      final (code, out) = await stream(
+        'docker',
+        ['compose', 'exec', '-T', 'web', 'composer', 'create-project', 'laravel/laravel', clean],
+        cwd: stack,
+        log: log,
+      );
+      if (code != 0) {
+        log('✖ Laravel kurulumu başarısız: $out');
+        throw StateError('Laravel kurulumu başarısız.');
+      }
+    } else {
+      final f = File('${targetDir.path}\\index.php');
+      await f.writeAsString('''<?php
+// MF Lab - $clean
+?>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>$clean</title>
+  <style>
+    body { font-family: sans-serif; background: #f8fafc; color: #1e293b; padding: 40px; }
+    .box { background: #fff; max-width: 600px; margin: 0 auto; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>🚀 $clean</h1>
+    <p>Bu dosya: <code>htdocs/$clean/index.php</code></p>
+    <p>PHP: <?= phpversion() ?></p>
+    <hr style="margin: 20px 0; border: 0; border-top: 1px solid #e2e8f0;">
+    <p><a href="../">← MF Lab Portalına Dön</a></p>
+  </div>
+</body>
+</html>
+''');
+    }
+
+    log('✔ "$clean" projesi başarıyla oluşturuldu.');
+    return targetDir.path;
+  }
+
+  /// Öğrencinin ödevini ve veritabanını tek tıkla Masaüstüne ZIP yapar.
+  static Future<String> packageAssignment({
+    required Course course,
+    String? subprojectName,
+    required String studentName,
+    required String studentNo,
+    required Log log,
+  }) async {
+    log('\n=== 📦 Ödev Paketleme Başlatılıyor ===');
+    final ws = workspaceDir(course);
+    final sourcePath = (subprojectName != null && subprojectName.isNotEmpty)
+        ? '$ws\\$subprojectName'
+        : ws;
+
+    if (!await Directory(sourcePath).exists()) {
+      throw StateError('Paketlenecek klasör bulunamadı: $sourcePath');
+    }
+
+    final tempDump = File('${Directory.systemTemp.path}\\mflab_dump.sql');
+    if (await tempDump.exists()) {
+      try { await tempDump.delete(); } catch (_) {}
+    }
+
+    try {
+      final stack = '${courseDir(course)}\\.stack\\web2-stack';
+      final vtysStack = '${courseDir(course)}\\.stack\\vtys-stack';
+      final targetStack = (await Directory(stack).exists()) ? stack : vtysStack;
+
+      if (await Directory(targetStack).exists()) {
+        log('Veritabanı yedeği alınıyor...');
+        final r = await run(
+          'docker',
+          ['compose', 'exec', '-T', 'db', 'mariadb-dump', '-u', 'root', '-proot', 'mflab'],
+          cwd: targetStack,
+        );
+        if (r.exitCode == 0 && (r.stdout as String).trim().isNotEmpty) {
+          await tempDump.writeAsString(r.stdout as String);
+          log('✔ MariaDB "mflab" veritabanı yedeği eklendi (veritabani.sql).');
+        }
+      }
+    } catch (_) {}
+
+    final cleanName = (studentName.trim().isEmpty ? 'Ogrenci' : studentName.trim())
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+    final cleanNo = studentNo.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_');
+    final targetLabel = (subprojectName != null && subprojectName.isNotEmpty)
+        ? subprojectName
+        : course.id;
+    final zipBaseName = '${cleanName}_${cleanNo.isEmpty ? '' : '${cleanNo}_'}${targetLabel}_Odev.zip';
+
+    final script = StringBuffer()
+      ..writeln(r"$desktop = [Environment]::GetFolderPath('Desktop')")
+      ..writeln("\$outZip = Join-Path \$desktop '${_ps(zipBaseName)}'")
+      ..writeln("\$srcDir = '${_ps(sourcePath)}'")
+      ..writeln(r'if (Test-Path $outZip) { Remove-Item -Force $outZip }')
+      ..writeln(r'$files = Get-ChildItem -Path $srcDir -Exclude "vendor", "node_modules", ".git"')
+      ..writeln(r'$paths = @($files.FullName)')
+      ..writeln("if (Test-Path '${_ps(tempDump.path)}') { \$paths += '${_ps(tempDump.path)}' }")
+      ..writeln(r'Compress-Archive -Path $paths -DestinationPath $outZip -Force')
+      ..writeln(r'Write-Output $outZip');
+
+    final tmpScript = File('${Directory.systemTemp.path}\\mflab_zip.ps1');
+    await tmpScript.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(script.toString())]);
+
+    final r = await run('powershell', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      tmpScript.path,
+    ]);
+
+    if (await tempDump.exists()) {
+      try { await tempDump.delete(); } catch (_) {}
+    }
+
+    if (r.exitCode != 0) {
+      log('✖ ZIP oluşturulamadı: ${r.stderr}');
+      throw StateError('Paketleme başarısız oldu.');
+    }
+
+    final outZipPath = (r.stdout as String).trim();
+    log('✔ Ödev paketi başarıyla Masaüstünüze oluşturuldu:');
+    log('  $outZipPath');
+
+    try {
+      await Process.start('explorer.exe', ['/select,', outZipPath], runInShell: true);
+    } catch (_) {}
+
+    return outZipPath;
+  }
+
+  /// Örnek eğitim veritabanını Docker MariaDB'ye aktarır.
+  static Future<void> loadSampleDatabase({
+    required Course course,
+    required String sampleKey,
+    required Log log,
+  }) async {
+    log('\n=== 🗄️ Örnek Veritabanı Yükleniyor ($sampleKey) ===');
+    final stack = '${courseDir(course)}\\.stack\\web2-stack';
+    final vtysStack = '${courseDir(course)}\\.stack\\vtys-stack';
+    final targetStack = (await Directory(stack).exists()) ? stack : vtysStack;
+
+    String sql;
+    String dbName;
+    if (sampleKey == 'eticaret') {
+      dbName = 'E-Ticaret Demo';
+      sql = '''
+CREATE DATABASE IF NOT EXISTS mflab CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE mflab;
+DROP TABLE IF EXISTS siparisler;
+DROP TABLE IF EXISTS urunler;
+DROP TABLE IF EXISTS kategoriler;
+CREATE TABLE kategoriler (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ad VARCHAR(50) NOT NULL
+);
+CREATE TABLE urunler (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  kategori_id INT,
+  ad VARCHAR(100) NOT NULL,
+  fiyat DECIMAL(10,2) NOT NULL,
+  stok INT DEFAULT 0,
+  FOREIGN KEY (kategori_id) REFERENCES kategoriler(id) ON DELETE SET NULL
+);
+INSERT INTO kategoriler (ad) VALUES ('Elektronik'), ('Kitap'), ('Yazılım');
+INSERT INTO urunler (kategori_id, ad, fiyat, stok) VALUES
+  (1, 'Kablosuz Klavye & Mouse', 550.00, 30),
+  (1, 'USB-C Hub Çoklayıcı', 320.00, 45),
+  (2, 'PHP & MySQL Başucu Kitabı', 240.00, 100),
+  (2, 'Temiz Kod (Clean Code)', 280.00, 60),
+  (3, 'IDE Yıllık Lisans', 1200.00, 15);
+''';
+    } else if (sampleKey == 'kutuphane') {
+      dbName = 'Kütüphane Sistemi';
+      sql = '''
+CREATE DATABASE IF NOT EXISTS mflab CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE mflab;
+DROP TABLE IF EXISTS odunc;
+DROP TABLE IF EXISTS kitaplar;
+DROP TABLE IF EXISTS uyeler;
+CREATE TABLE uyeler (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ad VARCHAR(50) NOT NULL,
+  soyad VARCHAR(50) NOT NULL,
+  eposta VARCHAR(100) UNIQUE
+);
+CREATE TABLE kitaplar (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  baslik VARCHAR(150) NOT NULL,
+  yazar VARCHAR(100) NOT NULL,
+  sayfa INT
+);
+INSERT INTO uyeler (ad, soyad, eposta) VALUES
+  ('Ali', 'Yıldız', 'ali@example.com'),
+  ('Zeynep', 'Kaya', 'zeynep@example.com');
+INSERT INTO kitaplar (baslik, yazar, sayfa) VALUES
+  ('Nutuk', 'Mustafa Kemal Atatürk', 600),
+  ('Simyacı', 'Paulo Coelho', 188),
+  ('Kürk Mantolu Madonna', 'Sabahattin Ali', 160);
+''';
+    } else {
+      dbName = 'Öğrenci Not Sistemi';
+      sql = '''
+CREATE DATABASE IF NOT EXISTS mflab CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE mflab;
+DROP TABLE IF EXISTS notlar;
+DROP TABLE IF EXISTS ogrenciler;
+CREATE TABLE ogrenciler (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ad VARCHAR(50) NOT NULL,
+  soyad VARCHAR(50) NOT NULL,
+  ogrenci_no VARCHAR(20) NOT NULL UNIQUE,
+  bolum VARCHAR(100) NOT NULL
+);
+CREATE TABLE notlar (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ogrenci_id INT NOT NULL,
+  ders_adi VARCHAR(100) NOT NULL,
+  vize INT,
+  final INT,
+  FOREIGN KEY (ogrenci_id) REFERENCES ogrenciler(id) ON DELETE CASCADE
+);
+INSERT INTO ogrenciler (ad, soyad, ogrenci_no, bolum) VALUES
+  ('Ahmet', 'Yılmaz', '2026101', 'Bilgisayar Programcılığı'),
+  ('Ayşe', 'Demir', '2026102', 'Bilişim Güvenliği'),
+  ('Mehmet', 'Kaya', '2026103', 'Yazılım Mühendisliği'),
+  ('Fatma', 'Çelik', '2026104', 'Bilgisayar Programcılığı');
+INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
+  (1, 'Web Programlama II', 85, 90),
+  (1, 'Veritabanı Yönetimi', 75, 80),
+  (2, 'Web Programlama II', 90, 95),
+  (3, 'Veritabanı Yönetimi', 60, 70),
+  (4, 'Web Programlama II', 100, 100);
+''';
+    }
+
+    final tmpSql = File('${Directory.systemTemp.path}\\sample_init.sql');
+    await tmpSql.writeAsString(sql);
+
+    final r = await run('powershell', [
+      '-NoProfile',
+      '-Command',
+      "Get-Content '${tmpSql.path}' | docker compose exec -T db mariadb -u root -proot mflab"
+    ], cwd: targetStack);
+
+    try { await tmpSql.delete(); } catch (_) {}
+
+    if (r.exitCode == 0) {
+      log('✔ "$dbName" tabloları ve örnek verileri "mflab" veritabanına başarıyla yüklendi.');
+      log('phpMyAdmin üzerinden (http://localhost:6381) tabloları inceleyebilirsiniz.');
+    } else {
+      log('✖ Veritabanı aktarımı başarısız oldu: ${r.stderr}');
+    }
+  }
+
+  /// MF Lab portlarının durumunu (çakışma var mı, dinleniyor mu) analiz eder.
+  static Future<void> checkPorts(Log log) async {
+    log('\n=== 🩺 MF Lab Port Doktoru & Teşhis ===');
+    final ports = <int, String>{
+      6380: 'Apache Web Sunucusu (Web Programlama II)',
+      6381: 'phpMyAdmin (Web Programlama II)',
+      6306: 'MariaDB Veritabanı (Web Programlama II)',
+      6332: 'PostgreSQL Veritabanı (VTYS)',
+      6350: 'pgAdmin Arayüzü (VTYS)',
+      6307: 'MariaDB Veritabanı (VTYS)',
+      6382: 'phpMyAdmin (VTYS)',
+    };
+
+    for (final entry in ports.entries) {
+      final port = entry.key;
+      final desc = entry.value;
+      try {
+        final socket = await Socket.connect('127.0.0.1', port, timeout: const Duration(milliseconds: 350));
+        socket.destroy();
+        log('🟢 Port $port: Aktif & Dinliyor ($desc)');
+      } catch (_) {
+        log('⚪ Port $port: Boş / Servis kapalı ($desc)');
+      }
+    }
+    log('===========================================\n'
+        'Not: "Aktif & Dinliyor" yeşil olan portlar servislerinizin çalıştığını doğrular.');
+  }
+
+  /// Kullanılmayan Docker konteyner ve önbelleklerini temizler.
+  static Future<void> cleanDocker(Log log) async {
+    log('\n=== 🧹 Docker Sistem & Önbellek Temizliği ===');
+    log('Kullanılmayan önbellekler temizleniyor...');
+    await stream('docker', ['system', 'prune', '-f'], log: log);
+    log('✔ Docker önbellek temizliği tamamlandı.');
+  }
+
+  static String get _htdocsPortalHtml => r'''<?php
+// MF Lab - Akilli Ogrenci Calisma Portali
+$dbOk = false;
+$dbErr = '';
+try {
+    $pdo = new PDO("mysql:host=db;dbname=mflab;charset=utf8mb4", "root", "root", [PDO::ATTR_TIMEOUT => 2]);
+    $dbOk = true;
+} catch (Exception $e) {
+    $dbErr = $e->getMessage();
+}
+
+$msg = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['folder_name'])) {
+    $rawName = trim($_POST['folder_name']);
+    $folderName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $rawName);
+    if (!empty($folderName) && !is_dir($folderName)) {
+        mkdir($folderName, 0777, true);
+        $sampleCode = "<?php\n// Proje: {$folderName}\n?>\n<!DOCTYPE html>\n<html lang=\"tr\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>{$folderName}</title>\n  <style>body{font-family:sans-serif;padding:30px;line-height:1.6;background:#f8fafc;color:#1e293b;}.card{background:#fff;padding:24px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);max-width:600px;margin:0 auto;}</style>\n</head>\n<body>\n  <div class=\"card\">\n    <h2>🚀 {$folderName} Calisiyor!</h2>\n    <p>Bu dosya: <code>htdocs/{$folderName}/index.php</code></p>\n    <p>PHP Surumu: " . phpversion() . "</p>\n    <p><a href=\"../\">← MF Lab Portalina Don</a></p>\n  </div>\n</body>\n</html>";
+        file_put_contents("{$folderName}/index.php", $sampleCode);
+        header("Location: {$folderName}/");
+        exit;
+    } else {
+        $msg = 'Klasor zaten mevcut veya gecersiz isim!';
+    }
+}
+
+$projects = [];
+$items = scandir('.');
+foreach ($items as $item) {
+    if ($item === '.' || $item === '..' || !is_dir($item) || $item[0] === '.') continue;
+    $targetUrl = $item . '/';
+    $isLaravel = false;
+    if (is_dir($item . '/public') && file_exists($item . '/public/index.php')) {
+        $targetUrl = $item . '/public/';
+        $isLaravel = true;
+    }
+    $mtime = filemtime($item);
+    $projects[] = [
+        'name' => $item,
+        'url' => $targetUrl,
+        'isLaravel' => $isLaravel,
+        'mtime' => date('d.m.Y H:i', $mtime),
+    ];
+}
+?>
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MF Lab - Ogrenci Portali</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px 20px; line-height: 1.5; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { background: linear-gradient(135deg, #1e293b, #334155); padding: 28px; border-radius: 16px; border: 1px solid #475569; margin-bottom: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+    h1 { font-size: 26px; color: #38bdf8; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+    .status-bar { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; font-size: 13px; }
+    .badge { padding: 4px 10px; border-radius: 8px; background: #1e293b; border: 1px solid #475569; display: inline-flex; align-items: center; gap: 6px; }
+    .badge.success { border-color: #10b981; color: #34d399; }
+    .badge.warn { border-color: #f59e0b; color: #fbbf24; }
+    .badge a { color: inherit; text-decoration: none; font-weight: 600; }
+    .create-card { background: #1e293b; border: 1px solid #334155; padding: 20px; border-radius: 14px; margin-bottom: 24px; }
+    .create-card h2 { font-size: 17px; margin-bottom: 12px; color: #94a3b8; }
+    .form-row { display: flex; gap: 10px; }
+    input[type="text"] { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 14px; }
+    input[type="text"]:focus { outline: none; border-color: #38bdf8; }
+    button { background: #0284c7; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #0369a1; }
+    .section-title { font-size: 18px; margin-bottom: 14px; color: #cbd5e1; display: flex; justify-content: space-between; align-items: center; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+    .project-card { background: #1e293b; border: 1px solid #334155; padding: 18px; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between; }
+    .project-card:hover { border-color: #38bdf8; }
+    .project-name { font-size: 17px; font-weight: 600; color: #f1f5f9; margin-bottom: 6px; word-break: break-all; }
+    .project-meta { font-size: 12px; color: #64748b; margin-bottom: 14px; }
+    .project-btn { display: inline-block; text-align: center; background: #334155; color: #38bdf8; text-decoration: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid #475569; }
+    .project-btn:hover { background: #38bdf8; color: #0f172a; }
+    .empty-state { text-align: center; padding: 40px; background: #1e293b; border-radius: 12px; border: 1px dashed #475569; color: #94a3b8; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>🎓 MF Lab Ogrenci Portali</h1>
+    <p style="color: #94a3b8; font-size: 14px;">Calisma alanindaki projeleriniz ve haftalik odevleriniz asagida listelenmistir.</p>
+    <div class="status-bar">
+      <span class="badge success">✔ PHP <?= phpversion() ?></span>
+      <span class="badge <?= $dbOk ? 'success' : 'warn' ?>"><?= $dbOk ? '✔ MariaDB Bagli' : '⚠️ MariaDB: ' . htmlspecialchars($dbErr) ?></span>
+      <span class="badge"><a href="http://localhost:6381" target="_blank">🐬 phpMyAdmin Ac (6381) ↗</a></span>
+      <span class="badge">📁 C:\MFLab\htdocs</span>
+    </div>
+  </header>
+
+  <div class="create-card">
+    <h2>➕ Yeni Hafta / Proje Klasoru Ekle</h2>
+    <form method="POST" class="form-row">
+      <input type="text" name="folder_name" placeholder="Orn: hafta1_giris veya odev2" required pattern="[a-zA-Z0-9_\-]+" title="Bosluksuz harf, rakam ve alt cizgi kullanin">
+      <button type="submit">Olustur ve Ac</button>
+    </form>
+    <?php if ($msg): ?><p style="color:#ef4444; font-size:13px; margin-top:8px;"><?= htmlspecialchars($msg) ?></p><?php endif; ?>
+  </div>
+
+  <div class="section-title">
+    <span>📁 Projeleriniz (<?= count($projects) ?>)</span>
+    <span style="font-size: 12px; color: #64748b;">Dogrudan projeye gitmek icin tiklayin</span>
+  </div>
+
+  <?php if (empty($projects)): ?>
+    <div class="empty-state">
+      <p style="font-size: 16px; margin-bottom: 8px;">Henuz bir alt proje veya hafta klasoru eklenmedi.</p>
+      <p style="font-size: 13px;">Yukaridaki alandan <b>hafta1</b> gibi bir isim yazarak ilk projenizi baslatabilirsiniz.</p>
+    </div>
+  <?php else: ?>
+    <div class="grid">
+      <?php foreach ($projects as $p): ?>
+        <div class="project-card">
+          <div>
+            <div class="project-name">📁 <?= htmlspecialchars($p['name']) ?></div>
+            <div class="project-meta">Guncelleme: <?= $p['mtime'] ?><?= $p['isLaravel'] ? ' · <b style="color:#f43f5e;">Laravel</b>' : '' ?></div>
+          </div>
+          <a href="<?= htmlspecialchars($p['url']) ?>" class="project-btn">Projeyi Calistir ↗</a>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  <?php endif; ?>
+</div>
+</body>
+</html>
+''';
 
   static Future<bool> isRunning(Course c, LabPackage p) async {
     final dir = stackDir(c, p);
@@ -603,12 +1138,16 @@ GitHub         : ${AppConfig.repoUrl}
     required Catalog catalog,
     required String studentName,
     required String studentNumber,
+    String? subprojectName,
     required Log log,
   }) async {
     log('\n=== 📦 Ödev Teslim Paketi Oluşturuluyor ===');
     final cleanName = studentName.trim().replaceAll(RegExp(r'\s+'), '_').replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
     final cleanNo = studentNumber.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-    final zipName = '${cleanNo}_${cleanName}_${course.id}.zip';
+    final cleanSub = (subprojectName != null && subprojectName.isNotEmpty)
+        ? '_${subprojectName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_')}'
+        : '';
+    final zipName = '${cleanNo}_${cleanName}_${course.id}$cleanSub.zip';
 
     final rDesk = await run('powershell', ['-NoProfile', '-Command', r"[Environment]::GetFolderPath('Desktop')"]);
     final desktop = (rDesk.stdout as String).trim();
@@ -626,15 +1165,19 @@ GitHub         : ${AppConfig.repoUrl}
         'Ogrenci No: $studentNumber\n'
         'Ad Soyad: $studentName\n'
         'Ders: ${course.name}\n'
+        'Proje / Hafta: ${subprojectName ?? "Tüm Çalışma Alanı"}\n'
         'Tarih: ${DateTime.now()}\n'
         '====================================\n',
       );
 
       // 2. Kod klasörünü kopyala
       final ws = Directory(workspaceDir(course));
-      if (await ws.exists()) {
-        log('Proje kodları kopyalanıyor...');
-        final copyScript = 'Copy-Item -Path "${_ps(ws.path)}\\*" -Destination "${_ps(tempDir.path)}\\kodlar" -Recurse -Force';
+      final sourceDir = (subprojectName != null && subprojectName.isNotEmpty)
+          ? Directory('${ws.path}\\$subprojectName')
+          : ws;
+      if (await sourceDir.exists()) {
+        log('Proje kodları kopyalanıyor (${subprojectName ?? "Tüm Projeler"})...');
+        final copyScript = 'Copy-Item -Path "${_ps(sourceDir.path)}\\*" -Destination "${_ps(tempDir.path)}\\kodlar" -Recurse -Force';
         await Directory('${tempDir.path}\\kodlar').create(recursive: true);
         await run('powershell', ['-NoProfile', '-Command', copyScript]);
       }
@@ -663,6 +1206,9 @@ GitHub         : ${AppConfig.repoUrl}
       final r = await run('powershell', ['-NoProfile', '-Command', zipScript]);
       if (r.exitCode == 0 && await File(outZip).exists()) {
         log('🎉 Ödev paketi masaüstünde hazır: $zipName');
+        try {
+          await Process.start('explorer.exe', ['/select,', outZip], runInShell: true);
+        } catch (_) {}
         return outZip;
       } else {
         log('✖ Zip oluşturulamadı: ${r.stderr}');

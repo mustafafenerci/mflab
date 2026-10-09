@@ -27,13 +27,17 @@
 * 🐳 **Docker İle Temiz Sistem:** Web sunucusu ve veritabanları izole Docker konteynerlerinde çalışır. Bilgisayarınızda çakışma yaratmaz, sisteminizi yormaz.
 * 🛡️ **Çakışmasız Port Standardı (63xx Serisi):** Bilgisayarınızda yerel MySQL, SQL Server veya IIS olsa dahi çakışma yaşanmaz. Tüm servisler garanti `63xx` port serisinde çalışır.
 * 📂 **Kalıcı Çalışma Klasörleri:** Yazdığınız tüm kodlar (`htdocs` vb.) ve veritabanı tablolarınız Windows üzerinde `C:\MFLab` dizininde güvende kalır.
+* 🚀 **Çoklu Proje & Haftalık Ders Portalı:** `htdocs` içindeki tüm haftalık ödev ve alt projeler dinamik MF Lab Öğrenci Portalı (`index.php`) ve masaüstü arayüzünden tek tıkla listelenir, taranır ve tarayıcıda/VS Code'da açılır.
+* 📦 **Tek Tıkla Ödev Paketleme (.ZIP):** İlgili haftanın projesini ve MariaDB/PostgreSQL veritabanı yedeğini (`veritabani.sql`) tek tıkla standart adlandırmayla (`No_AdSoyad_Ders_Proje.zip`) masaüstüne paketler.
+* 🗄️ **Hazır Eğitim Veritabanları:** Öğrenci Not Sistemi, E-Ticaret Demo ve Kütüphane Veritabanı tabloları tek tıkla veritabanınıza yüklenir.
+* 🩺 **Port Doktoru & Sistem Bakımı:** 63xx portlarını test ederek olası çakışmaları anında tespit eder; tek tıkla Docker disk alanını temizler.
 * 🖥️ **Masaüstü Kısayolları:** Kurulum tamamlandığında masaüstünüze doğrudan ilgili klasörü açan, VS Code'u başlatan ve phpMyAdmin/pgAdmin panellerine giden hazır kısayollar bırakılır.
 * 🔍 **Pedagojik ve Anlaşılır:** Her paketin yanında *"Bu yazılım neden kuruluyor?"* açıklaması bulunur. Hata durumunda neden kaynaklandığı ve çözüm yolu gösterilir.
 * ⚙️ **Kalıcı Ayarlar:** Öğrenci adı, tema tercihi ve son açılan ders bilgileri `C:\MFLab\settings.json` dosyasında güvenle saklanır.
 
 ---
 
-## 🎓 Desteklenen Dersler ve Servis Portları (v1.0.0)
+## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.0)
 
 | Ders | Bileşenler | Portlar | Masaüstü Klasörü |
 | :--- | :--- | :--- | :--- |

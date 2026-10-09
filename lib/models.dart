@@ -102,3 +102,16 @@ class UpdateInfo {
   final String notes;
   final bool mandatory;
 }
+
+class ProjectItem {
+  ProjectItem({
+    required this.name,
+    required this.path,
+    required this.modified,
+    required this.isLaravel,
+  });
+  final String name;
+  final String path;
+  final DateTime modified;
+  final bool isLaravel;
+}

@@ -51,6 +51,54 @@ class _ManagePageState extends State<ManagePage> {
     reload();
   }
 
+  Future<void> _showSampleDbDialog(BuildContext context, List<_Entry> items) async {
+    final activeEntry = items.firstWhere(
+      (e) => e.running && (e.pkg.id == 'web2-stack' || e.pkg.id == 'vtys-stack'),
+      orElse: () => items.first,
+    );
+
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Örnek Eğitim Veritabanı Yükle'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'ogrenci'),
+            child: const ListTile(
+              leading: Icon(Icons.school_outlined, color: Colors.blue),
+              title: Text('Öğrenci Not Sistemi'),
+              subtitle: Text('ogrenciler, dersler, notlar tabloları ve örnek kayıtlar'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'eticaret'),
+            child: const ListTile(
+              leading: Icon(Icons.shopping_bag_outlined, color: Colors.green),
+              title: Text('E-Ticaret Demo'),
+              subtitle: Text('kategoriler, urunler, siparisler tabloları'),
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'kutuphane'),
+            child: const ListTile(
+              leading: Icon(Icons.menu_book_outlined, color: Colors.amber),
+              title: Text('Kütüphane Sistemi'),
+              subtitle: Text('kitaplar, yazarlar, uyeler tabloları'),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (choice != null) {
+      await _task(() => Engine.loadSampleDatabase(
+            course: activeEntry.course,
+            sampleKey: choice,
+            log: s.log,
+          ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<_Entry>>(
@@ -89,6 +137,29 @@ class _ManagePageState extends State<ManagePage> {
             Text(
                 'Bu uygulamayı kapatsan bile servisler arka planda çalışmaya devam eder. Durdurmak için buradaki düğmeleri kullan.',
                 style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: s.busy ? null : () => _task(() => Engine.checkPorts(s.log)),
+                  icon: const Icon(Icons.health_and_safety_outlined, size: 18),
+                  label: const Text('Port Doktoru'),
+                ),
+                if (items.any((e) => e.running && (e.pkg.id == 'web2-stack' || e.pkg.id == 'vtys-stack')))
+                  OutlinedButton.icon(
+                    onPressed: s.busy ? null : () => _showSampleDbDialog(context, items),
+                    icon: const Icon(Icons.dataset_outlined, size: 18),
+                    label: const Text('Örnek Veritabanı Yükle'),
+                  ),
+                OutlinedButton.icon(
+                  onPressed: s.busy ? null : () => _task(() => Engine.cleanDocker(s.log)),
+                  icon: const Icon(Icons.cleaning_services_outlined, size: 18),
+                  label: const Text('Docker Temizliği'),
+                ),
+              ],
+            ),
             const SizedBox(height: 16),
             if (items.isEmpty)
               const Card(
@@ -187,6 +258,11 @@ class _ServiceCard extends StatelessWidget {
                       Engine.openInVsCode(Engine.workspaceDir(e.course)),
                   icon: const Icon(Icons.code, size: 18),
                   label: const Text('VS Code'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: busy ? null : () => _showProjectsDialog(context),
+                  icon: const Icon(Icons.folder_copy_outlined, size: 18),
+                  label: const Text('Projelerim & Haftalar'),
                 ),
                 OutlinedButton.icon(
                   onPressed: busy
@@ -421,26 +497,280 @@ class _ServiceCard extends StatelessWidget {
     }
   }
 
-  Future<void> _exportHomeworkDialog(BuildContext context) async {
+  Future<void> _showProjectsDialog(BuildContext context) async {
+    final c = entry.course;
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return FutureBuilder<List<ProjectItem>>(
+            future: Engine.getProjects(c),
+            builder: (ctx, snap) {
+              final projects = snap.data ?? [];
+              final loading = snap.connectionState == ConnectionState.waiting;
+
+              return AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(courseIcon(c.icon), size: 24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '${c.name} - Projelerim',
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                    ),
+                  ],
+                ),
+                content: SizedBox(
+                  width: 550,
+                  height: 420,
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          FilledButton.icon(
+                            onPressed: () async {
+                              final created = await _createNewProjectDialog(context);
+                              if (created) {
+                                setDialogState(() {});
+                              }
+                            },
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Yeni Hafta / Proje Ekle'),
+                          ),
+                          const Spacer(),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _exportHomeworkDialog(context);
+                            },
+                            icon: const Icon(Icons.archive_outlined, size: 18),
+                            label: const Text('Tümünü Paketle (.zip)'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(height: 1),
+                      Expanded(
+                        child: loading
+                            ? const Center(child: CircularProgressIndicator())
+                            : projects.isEmpty
+                                ? Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(20),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.folder_open, size: 48, color: Colors.grey),
+                                          const SizedBox(height: 8),
+                                          const Text(
+                                            'Henüz alt proje veya hafta klasörü yok.',
+                                            style: TextStyle(fontWeight: FontWeight.w600),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Tüm dosyalar doğrudan "${c.workspaceName}" ana klasöründe bulunuyor.\nYukarıdaki "Yeni Hafta / Proje Ekle" butonuyla "hafta1", "odev2" gibi ayrı klasörler açabilirsiniz.',
+                                            textAlign: TextAlign.center,
+                                            style: Theme.of(context).textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  )
+                                : ListView.separated(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    itemCount: projects.length,
+                                    separatorBuilder: (_, index) => const Divider(height: 1),
+                                    itemBuilder: (ctx, idx) {
+                                      final p = projects[idx];
+                                      final dateStr =
+                                          '${p.modified.day.toString().padLeft(2, '0')}.${p.modified.month.toString().padLeft(2, '0')}.${p.modified.year}';
+                                      return ListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        leading: CircleAvatar(
+                                          backgroundColor: Theme.of(context)
+                                              .colorScheme
+                                              .primaryContainer,
+                                          child: Icon(
+                                            p.isLaravel ? Icons.rocket_launch : Icons.folder,
+                                            size: 20,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onPrimaryContainer,
+                                          ),
+                                        ),
+                                        title: Text(
+                                          p.name,
+                                          style: const TextStyle(fontWeight: FontWeight.bold),
+                                        ),
+                                        subtitle: Text(
+                                          'Son değişiklik: $dateStr${p.isLaravel ? ' · Laravel Projesi' : ''}',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                        trailing: Wrap(
+                                          spacing: 6,
+                                          children: [
+                                            if (entry.running && entry.pkg.links.isNotEmpty)
+                                              IconButton(
+                                                tooltip: 'Tarayıcıda Çalıştır',
+                                                icon: const Icon(Icons.public, color: Colors.blue),
+                                                onPressed: () {
+                                                  final base = entry.pkg.links.first.url;
+                                                  final target = p.isLaravel
+                                                      ? '$base/${p.name}/public/'
+                                                      : '$base/${p.name}/';
+                                                  Engine.openUrl(target);
+                                                },
+                                              ),
+                                            IconButton(
+                                              tooltip: 'VS Code ile Aç',
+                                              icon: const Icon(Icons.code, color: Colors.teal),
+                                              onPressed: () => Engine.openInVsCode(p.path),
+                                            ),
+                                            IconButton(
+                                              tooltip: 'Bu Ödevi Paketle (.zip)',
+                                              icon: const Icon(Icons.archive, color: Colors.orange),
+                                              onPressed: () {
+                                                Navigator.pop(ctx);
+                                                _exportHomeworkDialog(context, subprojectName: p.name);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Kapat'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<bool> _createNewProjectDialog(BuildContext context) async {
+    final nameCtrl = TextEditingController();
+    String template = 'crud';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) {
+          return AlertDialog(
+            title: const Text('Yeni Hafta / Proje Klasörü Oluştur'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Proje / Hafta Adı (boşluksuz, küçük harf):'),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: nameCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Örn: hafta1_giris veya odev2',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Başlangıç Şablonu:'),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    initialValue: template,
+                    decoration: const InputDecoration(border: OutlineInputBorder()),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'crud',
+                        child: Text('Veritabanı / CRUD Şablonu (MariaDB bağlı)'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'blank',
+                        child: Text('Temiz Başlangıç (Boş index.php)'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'laravel',
+                        child: Text('Laravel Projesi (composer create-project)'),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDlgState(() => template = val);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Vazgeç'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (nameCtrl.text.trim().isNotEmpty) {
+                    Navigator.pop(ctx, true);
+                  }
+                },
+                child: const Text('Oluştur & Başlat'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (ok == true) {
+      final name = nameCtrl.text.trim();
+      await page._task(() async {
+        final path = await Engine.createProject(
+          course: entry.course,
+          projectName: name,
+          template: template,
+          log: page.s.log,
+        );
+        await Engine.openInVsCode(path);
+      });
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _exportHomeworkDialog(BuildContext context, {String? subprojectName}) async {
     final nameCtrl = TextEditingController(text: page.s.studentName);
     final noCtrl = TextEditingController(text: page.s.studentNumber);
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Ödev Teslim Paketi Oluştur (.zip)'),
+        title: Text(subprojectName != null
+            ? '"$subprojectName" Ödevini Paketle (.zip)'
+            : 'Ödev Teslim Paketi Oluştur (.zip)'),
         content: SizedBox(
           width: 400,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Kodların ve veritabanı yedeğin tek bir .zip arşivi olarak masaüstüne kaydedilecek.'),
+              Text(subprojectName != null
+                  ? '"$subprojectName" klasöründeki kodların ve veritabanı yedeğin tek bir .zip arşivi olarak masaüstüne kaydedilecek.'
+                  : 'Kodların ve veritabanı yedeğin tek bir .zip arşivi olarak masaüstüne kaydedilecek.'),
               const SizedBox(height: 12),
               TextField(
                 controller: noCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Öğrenci Numarası',
-                  hintText: 'Örn: 2024101050',
+                  hintText: 'Örn: 2026101',
                 ),
               ),
               const SizedBox(height: 8),
@@ -479,6 +809,7 @@ class _ServiceCard extends StatelessWidget {
             catalog: page.s.catalog!,
             studentName: name,
             studentNumber: no,
+            subprojectName: subprojectName,
             log: page.s.log,
           ));
     }
