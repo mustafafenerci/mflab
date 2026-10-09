@@ -2,7 +2,7 @@
 /// kendi GitHub deposunu ve imajını gösterebilir.
 class AppConfig {
   static const appName = 'MF Lab';
-  static const appVersion = '1.1.2';
+  static const appVersion = '1.1.3';
   static const author = 'Mustafa Fenerci';
   static const githubUser = 'mustafafenerci';
   static const githubRepo = 'mflab';

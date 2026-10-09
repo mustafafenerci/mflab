@@ -15,8 +15,18 @@ Write-Host "==========================================================" -Foregro
 Write-Host ""
 
 $repo = "mustafafenerci/mflab"
-$downloadUrl = "https://github.com/$repo/releases/latest/download/MFLab-Setup.exe"
-$tempFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "MFLab-Setup.exe")
+# Kurulum dosyasının adında sürüm var (MFLab-Setup-vX.Y.Z.exe); en güncelini GitHub'dan bul.
+$assetName = "MFLab-Setup.exe"
+$downloadUrl = "https://github.com/$repo/releases/latest/download/$assetName"
+try {
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -Headers @{ "User-Agent" = "MFLab-Installer" }
+    $asset = $release.assets | Where-Object { $_.name -like "MFLab-Setup-v*.exe" } | Select-Object -First 1
+    if ($asset) {
+        $assetName = $asset.name
+        $downloadUrl = $asset.browser_download_url
+    }
+} catch { }
+$tempFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), $assetName)
 
 Write-Host "⏳ En güncel MF Lab kurulum dosyası indiriliyor..." -ForegroundColor Yellow
 Write-Host "   Kaynak: $downloadUrl" -ForegroundColor Gray

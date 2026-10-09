@@ -53,12 +53,14 @@ jobs:
       - name: Checksum
         shell: pwsh
         run: |
-          $h = (Get-FileHash dist\MFLab-Setup.exe -Algorithm SHA256).Hash.ToLower()
-          "$h  MFLab-Setup.exe" | Out-File dist\MFLab-Setup.exe.sha256 -Encoding ascii
+          $v = "${{ steps.ver.outputs.version }}"
+          $f = "dist\MFLab-Setup-v$v.exe"
+          $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          "$h  MFLab-Setup-v$v.exe" | Out-File "$f.sha256" -Encoding ascii
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.ver.outputs.tag_name }}
           files: |
-            dist/MFLab-Setup.exe
-            dist/MFLab-Setup.exe.sha256
+            dist/MFLab-Setup-v${{ steps.ver.outputs.version }}.exe
+            dist/MFLab-Setup-v${{ steps.ver.outputs.version }}.exe.sha256
           generate_release_notes: true

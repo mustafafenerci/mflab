@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "1.1.2",
+  [string]$Version = "1.1.3",
   [switch]$SkipFlutter = $false
 )
 
@@ -45,7 +45,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "`n[3/3] Kurulum paketi masaustune kopyalaniyor..." -ForegroundColor Green
 $desktop = [Environment]::GetFolderPath('Desktop')
-$setupDist = Join-Path $root "dist\MFLab-Setup.exe"
+$setupDist = Join-Path $root "dist\MFLab-Setup-v$Version.exe"
 # Masaüstündeki kopyanın adına sürüm yazılır; hangisinin yeni olduğu hemen anlaşılır.
 $setupDesktop = Join-Path $desktop "MFLab-Setup-v$Version.exe"
 Get-ChildItem -Path $desktop -Filter "MFLab-Setup*.exe" -ErrorAction SilentlyContinue |
