@@ -1,5 +1,8 @@
 // Gerçek ağ ve sistem testleri. Bu dosyada testWidgets YOK: Flutter'ın test bağlamı
 // açılırsa tüm HTTP istekleri sahte 400 yanıtı döner ve bu testler anlamsızlaşır.
+@Tags(['network'])
+library;
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -39,10 +42,11 @@ void main() {
       markTestSkipped('Bu bilgisayarda test sürecinin internet erişimi engelli (güvenlik duvarı).');
       return;
     }
-    var last = 0.0;
+    double? last;
     final f = await Updater.download('1.1.6', onProgress: (p) => last = p);
     expect(await f.length(), greaterThan(1000000));
-    expect(last, closeTo(1.0, 0.001));
+    // Sunucu boyut bildirmezse ilerleme çağrılmaz; bildirirse %100'e ulaşmalı.
+    if (last != null) expect(last, closeTo(1.0, 0.001));
     expect(await Updater.verify('1.1.6', f), isTrue);
     await f.delete();
   }, timeout: const Timeout(Duration(minutes: 3)));

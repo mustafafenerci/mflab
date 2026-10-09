@@ -1,0 +1,4 @@
+# "network" etiketli testler gerçek internete ve bu bilgisayarın sistem bilgilerine erişir.
+# Release iş akışı bunları atlar (ağ dalgalanması yayını engellemesin); CI'da çalışırlar.
+tags:
+  network:

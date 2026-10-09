@@ -23,7 +23,22 @@ jobs:
           channel: stable
       - run: flutter pub get
       - run: flutter analyze
-      - run: flutter test
+      - run: flutter test --exclude-tags network --file-reporter json:test-results.json
+      - name: Report failed tests
+        if: failure()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path test-results.json)) { exit 0 }
+          $names = @{}
+          Get-Content test-results.json -Encoding utf8 | ForEach-Object {
+            try { $e = $_ | ConvertFrom-Json } catch { return }
+            if ($e.type -eq 'testStart') { $names[$e.test.id] = $e.test.name }
+            if ($e.type -eq 'error') {
+              $msg = (($e.error -split "`n") | Select-Object -First 4) -join ' | '
+              $msg = $msg.Replace('%', '%25').Replace("`r", '').Replace("`n", ' ')
+              Write-Output "::error::[$($names[$e.testID])] $msg"
+            }
+          }
       - run: flutter build windows --release
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
