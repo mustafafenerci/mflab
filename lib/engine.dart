@@ -417,6 +417,10 @@ class Engine {
       ..writeln(r'}')
       ..writeln(
           "Lnk '${_ps(course.workspaceName)} klasörü' '${_ps(ws)}' \$null \$null");
+    final exe = Platform.resolvedExecutable;
+    if (exe.isNotEmpty && exe.toLowerCase().endsWith('.exe')) {
+      sb.writeln("Lnk 'MF Lab Yönetim Paneli' '${_ps(exe)}' \$null \$null");
+    }
     if (hasCode) {
       sb.writeln(
           "Lnk 'VS Code ile aç' 'cmd.exe' '/c code \"${_ps(ws)}\"' 7");
@@ -427,6 +431,45 @@ class Engine {
             "Set-Content -Path (Join-Path \$dir '${_ps(l.name)}.url') -Value \"[InternetShortcut]`nURL=${_ps(l.url)}`nIconFile=${_ps(icon)}`nIconIndex=0\"");
       }
     }
+
+    final infoText = [
+      '============================================================',
+      '  MF Lab - Ders ve Calisma Ortami Bilgisi',
+      '============================================================',
+      'Ders           : ${_ps(course.name)} (${_ps(course.id)})',
+      'MF Lab Surumu  : v${AppConfig.appVersion}',
+      'Kurulum Tarihi : \$(Get-Date -Format "dd.MM.yyyy HH:mm:ss")',
+      'Gelistirici    : ${_ps(AppConfig.author)}',
+      'GitHub         : ${_ps(AppConfig.repoUrl)}',
+      '',
+      'Calisma Alani  : ${_ps(ws)}',
+      'Konteyner Dizini: ${_ps(courseDir(course))}\\.stack',
+      '',
+      'HIZLI ERISIM & KULLANIM:',
+      '1. "VS Code ile ac" kisayolu ile projeyi kodlamaya baslayabilirsin.',
+      '2. "${course.workspaceName} klasoru" icinde olusturdugun tum kodlar saklanir.',
+      '3. Servisleri baslatmak/durdurmak veya loglari gormek icin',
+      '   "MF Lab Yonetim Paneli" kisayolunu calistirabilirsin.',
+      '============================================================',
+    ].join('`r`n');
+
+    sb.writeln(
+        "Set-Content -Path (Join-Path \$dir 'MF_LAB_BILGI.txt') -Value \"$infoText\" -Encoding UTF8");
+
+    try {
+      final infoCourse = File('${courseDir(course)}\\MF_LAB_BILGI.txt');
+      await infoCourse.writeAsString('''============================================================
+  MF Lab - Ders ve Çalışma Ortamı Bilgisi
+============================================================
+Ders           : ${course.name} (${course.id})
+MF Lab Sürümü  : v${AppConfig.appVersion}
+Kurulum Tarihi : ${DateTime.now().toString().split('.').first}
+Geliştirici    : ${AppConfig.author}
+GitHub         : ${AppConfig.repoUrl}
+Çalışma Alanı  : $ws
+============================================================
+''');
+    } catch (_) {}
 
     final tmp = File('${Directory.systemTemp.path}\\mflab_shortcuts.ps1');
     await tmp.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(sb.toString())]);
