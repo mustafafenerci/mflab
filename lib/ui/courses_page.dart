@@ -248,6 +248,13 @@ class _ReadyCard extends StatelessWidget {
                   ),
               ],
             ),
+            if (course.packages.any((id) => cat.packages[id]?.isDocker ?? false)) ...[
+              const SizedBox(height: 12),
+              const Text(
+                '💡 İpucu: Sol menüdeki "Yönetim" sekmesinden servisleri dilediğin zaman başlatıp durdurabilir, logları görebilirsin.',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ],
           ],
         ),
       ),

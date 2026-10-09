@@ -188,6 +188,14 @@ class _ServiceCard extends StatelessWidget {
                   icon: const Icon(Icons.code, size: 18),
                   label: const Text('VS Code'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => page._task(
+                          () => Engine.showLogs(e.course, e.pkg, s.log)),
+                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                  label: const Text('Loglar'),
+                ),
                 if (e.running)
                   for (final a in e.pkg.actions)
                     OutlinedButton.icon(

@@ -61,6 +61,21 @@ class AboutPage extends StatelessWidget {
             ],
           ),
         ]),
+        _section(context, 'Sistem & Donanım Tanısı', [
+          const Text(
+              'Bilgisayarının Docker, WSL, VS Code, disk ve RAM durumunu tek tıkla tara. Bir sorun yaşarsan çıkan sonucu hocana iletebilirsin.'),
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            onPressed: state.busy
+                ? null
+                : () {
+                    state.clearLog();
+                    state.runTask(() => Engine.diagnoseSystem(state.log));
+                  },
+            icon: const Icon(Icons.troubleshoot),
+            label: const Text('Sistem Durumunu Tara'),
+          ),
+        ]),
         _section(context, 'Güncelleme', [
           ListenableBuilder(
             listenable: state,

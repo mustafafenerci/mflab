@@ -233,6 +233,54 @@ class Engine {
     await stream('docker', ['compose', 'stop'], cwd: stackDir(c, p), log: log);
   }
 
+  /// Konteyner loglarını (son 60 satır) ekrana akıtır.
+  static Future<void> showLogs(Course c, LabPackage p, Log log) async {
+    log('\n=== ${p.name} Son Loglar ===');
+    await stream('docker', ['compose', 'logs', '--tail', '60'],
+        cwd: stackDir(c, p), log: log);
+  }
+
+  /// Öğrencinin sistem durumunu (Docker, WSL, RAM, Disk, Araçlar) tarar.
+  static Future<void> diagnoseSystem(Log log) async {
+    log('\n=== 🔍 MF Lab Sistem & Donanım Tanısı ===');
+
+    // 1. Docker
+    final dInst = await dockerInstalled();
+    final dRun = await dockerRunning();
+    log(dRun
+        ? '✔ Docker: Çalışıyor (Engine hazır)'
+        : dInst
+            ? '⚠️ Docker: Kurulu fakat şu an ÇALIŞMIYOR. Docker Desktop\'ı açmalısın.'
+            : '✖ Docker: Kurulu DEĞİL.');
+
+    // 2. WSL
+    final wsl = await commandOk('wsl --status');
+    log(wsl ? '✔ WSL: Hazır ve aktif' : '⚠️ WSL: Bilgi alınamadı (Windows Home için WSL2 gerekebilir).');
+
+    // 3. VS Code & Git
+    final code = await commandOk('code --version');
+    log(code ? '✔ VS Code: Kurulu' : 'ℹ VS Code: Bulunamadı (Web tasarımı / kodlama için önerilir).');
+    final git = await commandOk('git --version');
+    log(git ? '✔ Git: Kurulu' : 'ℹ Git: Bulunamadı (Laravel/Composer için önerilir).');
+
+    // 4. Disk & RAM
+    try {
+      final r = await run('powershell', [
+        '-NoProfile',
+        '-Command',
+        r"$c = Get-PSDrive C; $free = [math]::Round($c.Free / 1GB, 1); "
+        r"$mem = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1); "
+        r"Write-Output ('RAM: ' + $mem + ' GB | C: Bos Alan: ' + $free + ' GB')"
+      ]);
+      if (r.exitCode == 0 && (r.stdout as String).trim().isNotEmpty) {
+        log('✔ Donanım: ${(r.stdout as String).trim()}');
+      }
+    } catch (_) {}
+
+    log('===========================================\n'
+        'İpucu: Sorun yaşarsan yukarıdaki metni sağ üstteki "Kopyala" butonuyla hocana iletebilirsin.');
+  }
+
   /// Konteynerleri siler; [removeVolumes] true ise veritabanı verileri de silinir.
   static Future<void> remove(Course c, LabPackage p, Log log,
       {bool removeVolumes = false}) async {
