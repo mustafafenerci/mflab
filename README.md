@@ -31,6 +31,7 @@
 * 📦 **Tek Tıkla Ödev Paketleme (.ZIP):** İlgili haftanın projesini ve MariaDB/PostgreSQL veritabanı yedeğini (`veritabani.sql`) tek tıkla standart adlandırmayla (`No_AdSoyad_Ders_Proje.zip`) masaüstüne paketler.
 * 🗄️ **Hazır Eğitim Veritabanları:** Öğrenci Not Sistemi, E-Ticaret Demo ve Kütüphane Veritabanı tabloları tek tıkla veritabanınıza yüklenir.
 * 🔔 **Sistem Tepsisi (saatin yanı):** MF Lab simgesine sağ tıklayınca kurulu servisleri, durumlarını (çalışıyor/durdu) ve hızlı işlemleri (başlat/durdur, siteyi aç, VS Code, terminal) görürsün. Servisler çalışırken pencereyi kapatırsan uygulama tepsiye iner; tamamen çıkmak için menüden **Çıkış**'ı seç.
+* 🌐 **Web Tasarımı Projelerim:** Her ödev/hafta için ayrı proje klasörü (index.html, style.css, script.js ve açıklamalı README hazır gelir). Her proje tek tıkla tarayıcıda **canlı önizlenir**: dosyayı kaydedince sayfa kendiliğinden yenilenir (Live Server gibi, ek kurulum gerekmez). VS Code içinde önizleme için Microsoft **Live Preview** eklentisi kurulur; eski Live Server eklentisi karışıklık olmasın diye kaldırılır.
 * 🔄 **Tek Tıkla Güncelleme:** Yeni sürüm çıkınca uygulamanın üstünde "Şimdi güncelle" düğmesi görünür; dosya indirilir, GitHub'daki SHA-256 özetiyle doğrulanır ve kurulur. MF Lab kısa bir süre kapanıp yeni sürümle açılır.
 * 👥 **Ortak Laboratuvar Bilgisayarları:** Her Windows kullanıcısının projeleri `C:\MFLab\<kullanıcı>` altında ayrı tutulur ve yalnızca o kullanıcı erişebilir; aynı bilgisayarı kullanan öğrenciler birbirinin ödevini görmez. (Eski sürümden kalan veriler taşınmadan yerinde kullanılmaya devam eder.)
 * 🚀 **Windows Açılınca Başlat (isteğe bağlı):** Hakkında → Ayarlar'dan açılırsa MF Lab bilgisayar açılınca pencere açmadan saatin yanında başlar.
@@ -43,7 +44,7 @@
 
 ---
 
-## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.7)
+## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.8)
 
 | Ders | Bileşenler | Portlar | Masaüstü Klasörü |
 | :--- | :--- | :--- | :--- |
@@ -57,7 +58,7 @@
 
 ### Yöntem 1: Kurulum Dosyası İle (Önerilen)
 1. **Setup Dosyasını İndirin:**  
-   [👉 **En Güncel Sürümü İndir (v1.1.7)**](https://github.com/mustafafenerci/mflab/releases/latest) — sayfadaki `MFLab-Setup-vX.Y.Z.exe` dosyasına tıklayın; dosya adındaki `vX.Y.Z` sürüm numarasıdır.
+   [👉 **En Güncel Sürümü İndir (v1.1.8)**](https://github.com/mustafafenerci/mflab/releases/latest) — sayfadaki `MFLab-Setup-vX.Y.Z.exe` dosyasına tıklayın; dosya adındaki `vX.Y.Z` sürüm numarasıdır.
 2. **Kurulumu Başlatın:**  
    `MFLab-Setup-vX.Y.Z.exe` dosyasını çalıştırın ve kurulum sihirbazını tamamlayın. Kurulum bitince MF Lab otomatik olarak açılır.
 3. **Dersinizi Seçin ve Kur'a Basın:**  

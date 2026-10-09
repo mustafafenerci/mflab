@@ -221,8 +221,9 @@ class Engine {
     return false;
   }
 
-  static Future<void> installExtensions(List<String> ids, Log log) async {
-    if (ids.isEmpty) return;
+  static Future<void> installExtensions(List<String> ids, Log log,
+      {List<String> remove = const []}) async {
+    if (ids.isEmpty && remove.isEmpty) return;
     await refreshPath();
     if (!await commandOk('code --version')) {
       log('VS Code komutu bulunamadı, eklentiler atlandı.');
@@ -232,6 +233,20 @@ class Engine {
     for (final e in ids) {
       final r = await run('code', ['--install-extension', e, '--force']);
       log(r.exitCode == 0 ? '  ✔ $e' : '  ✖ $e kurulamadı');
+    }
+    if (remove.isEmpty) return;
+    // Aynı işi yapan iki eklenti kafa karıştırmasın: eskisini kaldır.
+    final list = await run('code', ['--list-extensions']);
+    final installed = (list.stdout as String)
+        .split('\n')
+        .map((x) => x.trim().toLowerCase())
+        .toSet();
+    for (final x in remove) {
+      if (!installed.contains(x.toLowerCase())) continue;
+      final r = await run('code', ['--uninstall-extension', x]);
+      log(r.exitCode == 0
+          ? '  ✔ $x kaldırıldı (yerine Microsoft Live Preview kullanılıyor)'
+          : '  ✖ $x kaldırılamadı');
     }
   }
 
@@ -415,13 +430,76 @@ class Engine {
     if (c.workspaceName == 'htdocs') {
       await _writePortal(ws);
     } else if (c.workspaceName == 'proje') {
-      final f = File('$ws\\index.html');
-      if (!await f.exists() && (await Directory(ws).list().isEmpty)) {
-        await f.writeAsString('<!DOCTYPE html>\n<html lang="tr">\n<head>\n'
-            '  <meta charset="UTF-8">\n  <title>İlk Sayfam</title>\n</head>\n'
-            '<body>\n  <h1>Merhaba MF Lab!</h1>\n</body>\n</html>\n');
+      // Boş çalışma alanında öğrenciye hazır bir ilk proje aç.
+      if (await Directory(ws).list().isEmpty) {
+        await writeWebProject('$ws\\ilk-proje', 'ilk-proje');
       }
     }
+  }
+
+  /// HTML/CSS/JS başlangıç projesi: index.html, style.css, script.js ve açıklamalı README.
+  static Future<void> writeWebProject(String dir, String name) async {
+    await Directory(dir).create(recursive: true);
+    await File('$dir\\index.html').writeAsString('''<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>$name</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>$name</h1>
+    <p>İlk sayfan hazır. <code>index.html</code> dosyasını değiştirip kaydet, önizleme kendiliğinden yenilenir.</p>
+  </header>
+
+  <main>
+    <button id="selam">Bana tıkla</button>
+    <p id="mesaj"></p>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
+''');
+    await File('$dir\\style.css').writeAsString('''body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 0 16px;
+  line-height: 1.6;
+  color: #1e293b;
+  background: #f8fafc;
+}
+
+h1 {
+  color: #0284c7;
+}
+
+button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #0284c7;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+}
+''');
+    await File('$dir\\script.js').writeAsString('''// Sayfa yüklenince çalışır.
+document.getElementById("selam").addEventListener("click", () => {
+  document.getElementById("mesaj").textContent = "Merhaba! JavaScript çalışıyor 🎉";
+});
+''');
+    final d = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final readme = (await rootBundle.loadString('assets/portal/README.web.template.md'))
+        .replaceAll('{{NAME}}', name)
+        .replaceAll('{{PATH}}', dir)
+        .replaceAll('{{DATE}}',
+            '${two(d.day)}.${two(d.month)}.${d.year} ${two(d.hour)}:${two(d.minute)}');
+    await File('$dir\\README.md').writeAsString(readme);
   }
 
   // ----------------------------------------------------------- projects & assignments
@@ -485,7 +563,11 @@ class Engine {
     }
     await targetDir.create(recursive: true);
 
-    if (template == 'crud') {
+    if (template == 'html') {
+      await writeWebProject(targetDir.path, clean);
+      log('✔ "$clean" projesi oluşturuldu.');
+      return targetDir.path;
+    } else if (template == 'crud') {
       final f = File('${targetDir.path}\\index.php');
       await f.writeAsString(r'''<?php
 // MF Lab - Veritabanı (CRUD) Başlangıç Şablonu

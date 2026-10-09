@@ -5,13 +5,18 @@
     "description": "HTML, CSS ve JavaScript için VS Code ve eklentileri. Docker gerekmez.",
     "icon": "palette",
     "workspaceName": "proje",
-    "packages": ["vscode"],
+    "packages": [
+      "vscode"
+    ],
     "extensions": [
-      "ritwickdey.LiveServer",
+      "ms-vscode.live-server",
       "esbenp.prettier-vscode",
       "formulahendry.auto-rename-tag",
       "formulahendry.auto-close-tag",
       "pranaygp.vscode-css-peek"
+    ],
+    "removeExtensions": [
+      "ritwickdey.LiveServer"
     ]
   },
   {
@@ -20,13 +25,21 @@
     "description": "PHP, MariaDB, phpMyAdmin, Composer, Git, Node.js ve Laravel ortamı.",
     "icon": "code",
     "workspaceName": "htdocs",
-    "packages": ["docker", "vscode", "git", "web2-stack"],
+    "packages": [
+      "docker",
+      "vscode",
+      "git",
+      "web2-stack"
+    ],
     "extensions": [
       "bmewburn.vscode-intelephense-client",
       "xdebug.php-debug",
       "laravel.vscode-laravel",
       "onecentlin.laravel-blade",
       "esbenp.prettier-vscode",
+      "ms-vscode.live-server"
+    ],
+    "removeExtensions": [
       "ritwickdey.LiveServer"
     ]
   },
@@ -36,7 +49,11 @@
     "description": "PostgreSQL ve MariaDB sunucuları, pgAdmin ve phpMyAdmin.",
     "icon": "storage",
     "workspaceName": "sql",
-    "packages": ["docker", "vscode", "vtys-stack"],
+    "packages": [
+      "docker",
+      "vscode",
+      "vtys-stack"
+    ],
     "extensions": [
       "mtxr.sqltools",
       "mtxr.sqltools-driver-pg",

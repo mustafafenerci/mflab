@@ -3,7 +3,7 @@
 ; Önce: flutter build windows --release
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.7"
+  #define MyAppVersion "1.1.8"
 #endif
 
 #define MyAppName "MF Lab"

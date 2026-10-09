@@ -261,4 +261,21 @@ void main() {
       expect(Updater.parseChecksum('bozuk'), isNull);
     });
   });
+
+  test('web projesi şablonu: dosyalar ve doldurulmuş README oluşur', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final tmp = await Directory.systemTemp.createTemp('mflab_web_');
+    final dir = '${tmp.path}/hafta1';
+    await Engine.writeWebProject(dir, 'hafta1');
+    for (final f in ['index.html', 'style.css', 'script.js', 'README.md']) {
+      expect(File('$dir/$f').existsSync(), isTrue, reason: f);
+    }
+    final html = File('$dir/index.html').readAsStringSync();
+    expect(html, contains('href="style.css"'));
+    expect(html, contains('src="script.js"'));
+    final readme = File('$dir/README.md').readAsStringSync();
+    expect(readme, startsWith('# hafta1'));
+    expect(readme, isNot(contains('{{')));
+    await tmp.delete(recursive: true);
+  });
 }

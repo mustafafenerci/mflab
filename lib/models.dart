@@ -56,6 +56,13 @@ class Course {
   List<String> get packages => List<String>.from(json['packages'] as List);
   List<String> get extensions =>
       List<String>.from((json['extensions'] ?? const []) as List);
+
+  /// Kurulumda varsa kaldırılacak eklentiler (aynı işi yapan eski eklentiler).
+  List<String> get removeExtensions =>
+      List<String>.from((json['removeExtensions'] ?? const []) as List);
+
+  /// Docker gerektirmeyen, projeleri doğrudan tarayıcıda açılan web dersi mi?
+  bool get isStaticWeb => workspaceName == 'proje';
 }
 
 class HelpEntry {

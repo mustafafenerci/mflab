@@ -1,6 +1,6 @@
 {
-  "version": "1.1.7",
+  "version": "1.1.8",
   "url": "https://github.com/mustafafenerci/mflab/releases/latest",
-  "notes": "Uygulama içinden tek tıkla güncelleme, her Windows kullanıcısına ayrı çalışma klasörü, Windows açılınca otomatik başlatma ve kaldırırken servisleri durdurma.",
+  "notes": "Web Tasarımı için Projelerim: her ödeve ayrı proje, tek tıkla canlı önizleme (kaydedince yenilenir) ve VS Code ile açma. Live Server yerine Microsoft Live Preview.",
   "mandatory": false
 }

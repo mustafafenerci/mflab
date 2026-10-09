@@ -227,7 +227,10 @@ ${tail.join('\n')}
         }
       }
 
-      if (vscodeOk) await Engine.installExtensions(course.extensions, log);
+      if (vscodeOk) {
+        await Engine.installExtensions(course.extensions, log,
+            remove: course.removeExtensions);
+      }
 
       final done = pkgs.where((p) => !p.isDocker || dockerOk).toList();
       if (allOk || done.any((p) => p.isDocker)) {

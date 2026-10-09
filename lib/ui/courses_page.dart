@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../app_state.dart';
 import '../engine.dart';
 import '../models.dart';
+import 'web_projects_dialog.dart';
 import 'widgets.dart';
 
 class CoursesPage extends StatefulWidget {
@@ -194,29 +197,48 @@ class _CourseDetail extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 20),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: FilledButton.icon(
-            onPressed: state.busy || selected.isEmpty
-                ? null
-                : () => state.install(course, selected),
-            icon: const Icon(Icons.download),
-            label: Text(state.busy ? 'Kuruluyor...' : '3. Kur'),
-            style: FilledButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
-          ),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            FilledButton.icon(
+              onPressed: state.busy || selected.isEmpty
+                  ? null
+                  : () => state.install(course, selected),
+              icon: const Icon(Icons.download),
+              label: Text(state.busy ? 'Kuruluyor...' : '3. Kur'),
+              style: FilledButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 28, vertical: 16)),
+            ),
+            if (course.isStaticWeb &&
+                (state.settings.courseInstallDates.containsKey(course.id) ||
+                    Directory(Engine.workspaceDir(course)).existsSync()))
+              HoverHint(
+                message:
+                    'Projelerini listeler: yeni proje aç, tarayıcıda canlı önizle veya VS Code\'da aç.',
+                child: FilledButton.tonalIcon(
+                  onPressed: () => showWebProjectsDialog(context, state, course),
+                  icon: const Icon(Icons.folder_copy_outlined),
+                  label: const Text('Projelerim'),
+                  style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 16)),
+                ),
+              ),
+          ],
         ),
-        if (ready) _ReadyCard(course: course, cat: cat),
+        if (ready) _ReadyCard(course: course, cat: cat, state: state),
       ],
     );
   }
 }
 
 class _ReadyCard extends StatelessWidget {
-  const _ReadyCard({required this.course, required this.cat});
+  const _ReadyCard({required this.course, required this.cat, required this.state});
   final Course course;
   final Catalog cat;
+  final AppState state;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +265,12 @@ class _ReadyCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (course.isStaticWeb)
+                  FilledButton.icon(
+                    onPressed: () => showWebProjectsDialog(context, state, course),
+                    icon: const Icon(Icons.folder_copy_outlined),
+                    label: const Text('Projelerim'),
+                  ),
                 for (final l in links)
                   FilledButton.tonalIcon(
                     onPressed: () => Engine.openUrl(l.url),

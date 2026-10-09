@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,6 +7,7 @@ import '../app_state.dart';
 import '../engine.dart';
 import '../models.dart';
 import '../preflight.dart';
+import 'web_projects_dialog.dart';
 import 'widgets.dart';
 
 class _Entry {
@@ -130,6 +133,13 @@ class _ManagePageState extends State<ManagePage> {
         }
         final items = snap.data!;
         final cs = Theme.of(context).colorScheme;
+        // Docker gerektirmeyen (HTML/CSS/JS) ve kurulmuş web dersleri.
+        final webCourses = s.catalog!.courses
+            .where((c) =>
+                c.isStaticWeb &&
+                (s.settings.courseInstallDates.containsKey(c.id) ||
+                    Directory(Engine.workspaceDir(c)).existsSync()))
+            .toList();
         final runningCount = items.where((e) => e.running).length;
         final hasDb = items.any((e) =>
             e.running && (e.pkg.id == 'web2-stack' || e.pkg.id == 'vtys-stack'));
@@ -227,7 +237,7 @@ class _ManagePageState extends State<ManagePage> {
                       .bodySmall
                       ?.copyWith(color: cs.onSurfaceVariant)),
             ),
-            if (items.isEmpty)
+            if (items.isEmpty && webCourses.isEmpty)
               Card(
                 margin: EdgeInsets.zero,
                 child: Padding(
@@ -245,6 +255,7 @@ class _ManagePageState extends State<ManagePage> {
                 ),
               ),
             for (final e in items) _ServiceCard(entry: e, page: this),
+            for (final c in webCourses) _WebCourseCard(course: c, state: s),
           ],
         );
       },
@@ -1080,6 +1091,103 @@ class _StatusPill extends StatelessWidget {
               style: TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w600, color: color)),
         ],
+      ),
+    );
+  }
+}
+
+/// Docker gerektirmeyen web dersi (Web Tasarımı) için sade kart: projeler, VS Code, klasör.
+class _WebCourseCard extends StatelessWidget {
+  const _WebCourseCard({required this.course, required this.state});
+  final Course course;
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final ws = Engine.workspaceDir(course);
+    const pad = EdgeInsets.symmetric(horizontal: 10);
+    const density = VisualDensity(horizontal: -2, vertical: -2);
+    const text = TextStyle(fontSize: 13);
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(courseIcon(course.icon), size: 18, color: cs.onPrimaryContainer),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(course.name,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      Text('HTML · CSS · JavaScript — sunucu gerekmez, projeler tarayıcıda açılır',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                HoverHint(
+                  message:
+                      'Projelerini listeler: yeni proje aç, tarayıcıda canlı önizle (kaydedince yenilenir) veya VS Code\'da aç.',
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => showWebProjectsDialog(context, state, course),
+                    icon: const Icon(Icons.folder_copy_outlined, size: 16),
+                    label: const Text('Projelerim'),
+                    style: FilledButton.styleFrom(
+                        padding: pad, visualDensity: density, textStyle: text),
+                  ),
+                ),
+                HoverHint(
+                  message: 'Tüm projelerini tek pencerede VS Code\'da açar.',
+                  child: OutlinedButton.icon(
+                    onPressed: () => Engine.openInVsCode(ws),
+                    icon: const Icon(Icons.code, size: 16),
+                    label: const Text('VS Code'),
+                    style: OutlinedButton.styleFrom(
+                        padding: pad, visualDensity: density, textStyle: text),
+                  ),
+                ),
+                HoverHint(
+                  message: 'Proje klasörünü Dosya Gezgini\'nde açar.',
+                  child: OutlinedButton.icon(
+                    onPressed: () => Engine.openFolder(ws),
+                    icon: const Icon(Icons.folder_open, size: 16),
+                    label: const Text('Klasör'),
+                    style: OutlinedButton.styleFrom(
+                        padding: pad, visualDensity: density, textStyle: text),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
