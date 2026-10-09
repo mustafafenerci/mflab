@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'config.dart';
 
 import 'engine.dart';
 import 'models.dart';
@@ -48,10 +51,13 @@ class AppState extends ChangeNotifier {
   bool busy = false;
   HelpEntry? lastHelp;
   Course? finishedCourse;
+  bool installFailed = false;
+  String? currentCourseName;
   bool logVisible = false;
 
   Future<void> init() async {
     settings = await AppSettings.load();
+    await Engine.loadPortMaps();
     catalog = await Catalog.load();
     notifyListeners();
     await checkUpdate();
@@ -79,7 +85,25 @@ class AppState extends ChangeNotifier {
     logs.clear();
     logVisible = false;
     lastHelp = null;
+    installFailed = false;
     notifyListeners();
+  }
+
+  /// Yapay zekâ asistanına yapıştırılacak, Türkçe ve kendi kendine yeten sorun özeti.
+  String buildAiPrompt() {
+    final tail = logs.length > 150 ? logs.sublist(logs.length - 150) : logs;
+    return '''Ben bir üniversite öğrencisiyim ve ders ortamımı "${AppConfig.appName}" (sürüm ${AppConfig.appVersion}) uygulamasıyla Docker üzerinden kurmaya çalışıyorum.
+Ders: ${currentCourseName ?? '-'}
+İşletim sistemi: ${Platform.operatingSystemVersion}
+
+Kurulum başarısız oldu veya hata verdi. Aşağıdaki kurulum günlüğüne bakıp:
+1. Sorunun ne olduğunu basit bir Türkçe ile anlat,
+2. Windows'ta adım adım nasıl çözeceğimi söyle,
+3. Çözümden sonra uygulamada tekrar "Kur"a basmam yeterli mi, belirt.
+
+--- Kurulum günlüğü ---
+${tail.join('\n')}
+--- Günlük sonu ---''';
   }
 
   void hideLog() {
@@ -91,6 +115,7 @@ class AppState extends ChangeNotifier {
     busy = true;
     logs.clear();
     lastHelp = null;
+    installFailed = false;
     finishedCourse = null;
     logVisible = true;
     notifyListeners();
@@ -105,26 +130,13 @@ class AppState extends ChangeNotifier {
   Future<void> install(Course course, Set<String> selected) async {
     final cat = catalog!;
     _begin();
+    currentCourseName = course.name;
     try {
       final pkgs = selected
           .map((id) => cat.packages[id])
           .whereType<LabPackage>()
           .toList()
         ..sort((a, b) => (a.isDocker ? 1 : 0).compareTo(b.isDocker ? 1 : 0));
-
-      // Port çakışması ön kontrolü
-      final allPorts = pkgs.expand((p) => p.ports).toSet().toList();
-      if (allPorts.isNotEmpty) {
-        log('Portlar kontrol ediliyor (${allPorts.join(', ')})...');
-        final conflicts = await Engine.findConflictingPorts(allPorts);
-        if (conflicts.isNotEmpty) {
-          log('⚠️ DİKKAT: Şu port(lar) şu an başka bir program tarafından KULLANILIYOR: ${conflicts.join(', ')}');
-          log('Eğer bilgisayarında XAMPP, Skype veya başka bir sunucu açıksa kapatman gerekebilir.');
-          lastHelp = Engine.helpFor(cat, 'port is already allocated');
-        } else {
-          log('✔ Portlar boş ve kullanıma hazır.');
-        }
-      }
 
       var dockerOk = true;
       var vscodeOk = false;
@@ -169,9 +181,11 @@ class AppState extends ChangeNotifier {
         settings.save();
         log('\n🎉 Hazır! Ders ortamın kuruldu.');
       } else {
+        installFailed = true;
         log('\nBazı adımlar tamamlanmadı. Yukarıdaki açıklamaları oku, sorunu giderip tekrar "Kur"a bas.');
       }
     } catch (e) {
+      installFailed = true;
       log('\n✖ Beklenmeyen bir hata oluştu: $e');
     } finally {
       _end();

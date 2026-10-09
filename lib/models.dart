@@ -61,6 +61,7 @@ class Course {
 class HelpEntry {
   HelpEntry(this.json);
   final Map<String, dynamic> json;
+  String get id => (json['id'] ?? '') as String;
   List<String> get match => List<String>.from(json['match'] as List);
   String get title => json['title'] as String;
   String get explain => json['explain'] as String;

@@ -60,6 +60,7 @@ class _LogPanelState extends State<LogPanel> {
                       child: CircularProgressIndicator(strokeWidth: 2)),
                 ],
                 const Spacer(),
+                if (!s.busy && s.logs.isNotEmpty) _AskAiButton(state: s),
                 IconButton(
                   tooltip: 'Günlüğü kopyala (hocana göndermek için)',
                   iconSize: 18,
@@ -103,6 +104,60 @@ class _LogPanelState extends State<LogPanel> {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Günlük panoya kopyalandı.')));
     }
+  }
+}
+
+/// Günlüğü hazır bir Türkçe istemle panoya kopyalar ve seçilen yapay zekâ sitesini açar.
+class _AskAiButton extends StatelessWidget {
+  const _AskAiButton({required this.state});
+  final AppState state;
+
+  static const _targets = <(String, String)>[
+    ('Claude', 'https://claude.ai/new'),
+    ('ChatGPT', 'https://chatgpt.com/'),
+    ('Gemini', 'https://gemini.google.com/app'),
+    ('Copilot', 'https://copilot.microsoft.com/'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final failed = state.installFailed;
+    return PopupMenuButton<String>(
+      tooltip: 'Sorunu yapay zekâya sor',
+      onSelected: (url) async {
+        await Clipboard.setData(ClipboardData(text: state.buildAiPrompt()));
+        await Engine.openUrl(url);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              duration: Duration(seconds: 8),
+              content: Text(
+                  'Sorun özeti panoya kopyalandı. Açılan sayfada sohbet kutusuna yapıştır (Ctrl+V) ve gönder.')));
+        }
+      },
+      itemBuilder: (_) => [
+        for (final t in _targets)
+          PopupMenuItem(value: t.$2, child: Text('${t.$1} ile sor')),
+      ],
+      child: Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: failed ? Colors.amber.shade700 : Colors.transparent,
+          border: Border.all(
+              color: failed ? Colors.amber.shade700 : Colors.white38),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.auto_awesome,
+              size: 15, color: failed ? Colors.black : Colors.white70),
+          const SizedBox(width: 6),
+          Text('Yapay zekâya sor',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: failed ? Colors.black : Colors.white70)),
+        ]),
+      ),
+    );
   }
 }
 

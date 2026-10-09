@@ -223,7 +223,8 @@ class _ReadyCard extends StatelessWidget {
     final links = course.packages
         .map((id) => cat.packages[id])
         .whereType<LabPackage>()
-        .expand((p) => p.links)
+        .expand((p) => p.links.map((l) =>
+            PackageLink(l.name, Engine.mapText(course.id, p.id, l.url))))
         .toList();
     return Card(
       margin: const EdgeInsets.only(top: 20),

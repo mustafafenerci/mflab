@@ -24,13 +24,17 @@ class Engine {
 
   // ---------------------------------------------------------------- process
 
+  /// Docker ve PowerShell çıktısı UTF-8'dir; systemEncoding ile okununca
+  /// Türkçe karakterler bozuluyordu ("Ã¶", "ÅŸ" gibi).
+  static const _utf8 = Utf8Codec(allowMalformed: true);
+
   static Future<ProcessResult> run(String cmd, List<String> args,
       {String? cwd}) {
     return Process.run(cmd, args,
         workingDirectory: cwd,
         runInShell: true,
-        stdoutEncoding: systemEncoding,
-        stderrEncoding: systemEncoding);
+        stdoutEncoding: _utf8,
+        stderrEncoding: _utf8);
   }
 
   /// Komutu çalıştırır, çıktıyı canlı olarak [log]'a akıtır ve tüm çıktıyı döner.
@@ -43,7 +47,7 @@ class Engine {
     for (final s in [proc.stdout, proc.stderr]) {
       final c = Completer<void>();
       done.add(c.future);
-      s.transform(systemEncoding.decoder).listen((d) {
+      s.transform(_utf8.decoder).listen((d) {
         buf.write(d);
         final t = d.trim();
         if (t.isNotEmpty) log(t);
@@ -160,10 +164,65 @@ class Engine {
     }
     await _seedWorkspace(course, ws);
 
+    // Bu kursun eski konteynerleri portları tutuyor olabilir; önce onları durdur,
+    // yoksa kendi kendimizle "çakışıyoruz" sanırız. Veriler (volume) korunur.
+    await run('docker', ['compose', 'down'], cwd: stack);
+
+    // Portlar doluysa otomatik olarak boş bir porta geçilir; böylece XAMPP, yerel
+    // MySQL vb. kurulu olan öğrencilerde de kurulum sorunsuz tamamlanır.
+    final portMap = <int, int>{};
+    if (p.ports.isNotEmpty) {
+      log('Portlar kontrol ediliyor (${p.ports.join(', ')})...');
+      var conflicts = await findConflictingPorts(p.ports);
+      if (conflicts.isNotEmpty) {
+        // Portu MF Lab'ın kendi (örn. eski sürümden kalan) konteyneri tutuyorsa onu kapat.
+        for (final port in conflicts) {
+          await _stopOwnContainersOnPort(port, log);
+        }
+        conflicts = await findConflictingPorts(conflicts);
+      }
+      if (conflicts.isEmpty) {
+        log('✔ Portlar boş ve kullanıma hazır.');
+      } else {
+        final taken = {...p.ports};
+        for (final port in conflicts) {
+          log('⚠ Port $port başka bir program tarafından kullanılıyor: '
+              '${await describePortUsers(port)}');
+          final free = await _findFreePort(taken);
+          if (free == null) {
+            log('✖ Boş bir port bulunamadı. Bilgisayarındaki sunucu programlarını (XAMPP, MySQL vb.) kapatıp tekrar dene.');
+            return InstallResult(false, help: _portHelp(cat));
+          }
+          taken.add(free);
+          portMap[port] = free;
+          log('  → Sorun değil: bu ders için $port yerine $free portu kullanılacak.');
+        }
+      }
+    }
+    await _savePortMap(course.id, p.id, portMap);
+    if (course.workspaceName == 'htdocs') {
+      try {
+        await File('$ws\\.mflab-ports.json').writeAsString(
+            jsonEncode(portMap.map((k, v) => MapEntry('$k', v))));
+      } catch (_) {}
+    }
+    if (portMap.isNotEmpty) {
+      var text = await rootBundle.loadString(p.compose!);
+      portMap.forEach((from, to) {
+        text = text.replaceAll('"$from:', '"$to:');
+      });
+      await File('$stack\\compose.yml').writeAsString(text);
+    }
+
     log('Konteynerler indiriliyor ve başlatılıyor (ilk seferde birkaç dakika sürebilir)...');
     var (code, out) =
         await stream('docker', ['compose', 'up', '-d'], cwd: stack, log: log);
-    if (code != 0 && p.buildContext != null) {
+    // Derleme yalnızca imaj indirilemediyse işe yarar; port/Docker hatasında boşa 10 dk harcar.
+    final firstHelp = code != 0 ? helpFor(cat, out) : null;
+    final buildCanHelp = firstHelp == null ||
+        firstHelp.id == 'image' ||
+        firstHelp.id == 'network';
+    if (code != 0 && p.buildContext != null && buildCanHelp) {
       log('Hazır imaj indirilemedi, imaj bu bilgisayarda derleniyor (5-10 dk sürebilir)...');
       (code, out) = await stream(
           'docker', ['compose', 'up', '-d', '--build'],
@@ -174,7 +233,7 @@ class Engine {
       return InstallResult(false, help: helpFor(cat, out));
     }
     log('✔ ${p.name} hazır.');
-    log(p.info);
+    log(mapText(course.id, p.id, p.info));
     return InstallResult(true);
   }
 
@@ -575,7 +634,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
 
     if (r.exitCode == 0) {
       log('✔ "$dbName" tabloları ve örnek verileri "mflab" veritabanına başarıyla yüklendi.');
-      log('phpMyAdmin üzerinden (http://localhost:6381) tabloları inceleyebilirsiniz.');
+      log('phpMyAdmin üzerinden (http://localhost:${effectivePort(6381)}) tabloları inceleyebilirsiniz.');
     } else {
       log('✖ Veritabanı aktarımı başarısız oldu: ${r.stderr}');
     }
@@ -595,7 +654,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
     };
 
     for (final entry in ports.entries) {
-      final port = entry.key;
+      final port = effectivePort(entry.key);
       final desc = entry.value;
       try {
         final socket = await Socket.connect('127.0.0.1', port, timeout: const Duration(milliseconds: 350));
@@ -618,7 +677,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
   }
 
   static String get _htdocsPortalHtml => r'''<?php
-// MF Lab - Akilli Ogrenci Calisma Portali
+// MF Lab - Akıllı Öğrenci Çalışma Portalı
 $dbOk = false;
 $dbErr = '';
 try {
@@ -634,14 +693,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['folder_name'])) {
     $folderName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $rawName);
     if (!empty($folderName) && !is_dir($folderName)) {
         mkdir($folderName, 0777, true);
-        $sampleCode = "<?php\n// Proje: {$folderName}\n?>\n<!DOCTYPE html>\n<html lang=\"tr\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>{$folderName}</title>\n  <style>body{font-family:sans-serif;padding:30px;line-height:1.6;background:#f8fafc;color:#1e293b;}.card{background:#fff;padding:24px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);max-width:600px;margin:0 auto;}</style>\n</head>\n<body>\n  <div class=\"card\">\n    <h2>🚀 {$folderName} Calisiyor!</h2>\n    <p>Bu dosya: <code>htdocs/{$folderName}/index.php</code></p>\n    <p>PHP Surumu: " . phpversion() . "</p>\n    <p><a href=\"../\">← MF Lab Portalina Don</a></p>\n  </div>\n</body>\n</html>";
+        $sampleCode = "<?php\n// Proje: {$folderName}\n?>\n<!DOCTYPE html>\n<html lang=\"tr\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>{$folderName}</title>\n  <style>body{font-family:sans-serif;padding:30px;line-height:1.6;background:#f8fafc;color:#1e293b;}.card{background:#fff;padding:24px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);max-width:600px;margin:0 auto;}</style>\n</head>\n<body>\n  <div class=\"card\">\n    <h2>🚀 {$folderName} Çalışıyor!</h2>\n    <p>Bu dosya: <code>htdocs/{$folderName}/index.php</code></p>\n    <p>PHP Sürümü: " . phpversion() . "</p>\n    <p><a href=\"../\">← MF Lab Portalına Dön</a></p>\n  </div>\n</body>\n</html>";
         file_put_contents("{$folderName}/index.php", $sampleCode);
         header("Location: {$folderName}/");
         exit;
     } else {
-        $msg = 'Klasor zaten mevcut veya gecersiz isim!';
+        $msg = 'Klasör zaten mevcut veya geçersiz isim!';
     }
 }
+
+$pmaPort = 6381;
+$portMap = @json_decode(@file_get_contents(__DIR__ . '/.mflab-ports.json'), true);
+if (is_array($portMap) && isset($portMap['6381'])) $pmaPort = (int)$portMap['6381'];
 
 $projects = [];
 $items = scandir('.');
@@ -667,7 +730,7 @@ foreach ($items as $item) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MF Lab - Ogrenci Portali</title>
+  <title>MF Lab - Öğrenci Portalı</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px 20px; line-height: 1.5; }
@@ -700,21 +763,21 @@ foreach ($items as $item) {
 <body>
 <div class="container">
   <header>
-    <h1>🎓 MF Lab Ogrenci Portali</h1>
-    <p style="color: #94a3b8; font-size: 14px;">Calisma alanindaki projeleriniz ve haftalik odevleriniz asagida listelenmistir.</p>
+    <h1>🎓 MF Lab Öğrenci Portalı</h1>
+    <p style="color: #94a3b8; font-size: 14px;">Çalışma alanındaki projeleriniz ve haftalık ödevleriniz aşağıda listelenmiştir.</p>
     <div class="status-bar">
       <span class="badge success">✔ PHP <?= phpversion() ?></span>
-      <span class="badge <?= $dbOk ? 'success' : 'warn' ?>"><?= $dbOk ? '✔ MariaDB Bagli' : '⚠️ MariaDB: ' . htmlspecialchars($dbErr) ?></span>
-      <span class="badge"><a href="http://localhost:6381" target="_blank">🐬 phpMyAdmin Ac (6381) ↗</a></span>
+      <span class="badge <?= $dbOk ? 'success' : 'warn' ?>"><?= $dbOk ? '✔ MariaDB Bağlı' : '⚠️ MariaDB: ' . htmlspecialchars($dbErr) ?></span>
+      <span class="badge"><a href="http://localhost:<?= $pmaPort ?>" target="_blank">🐬 phpMyAdmin Aç (<?= $pmaPort ?>) ↗</a></span>
       <span class="badge">📁 C:\MFLab\htdocs</span>
     </div>
   </header>
 
   <div class="create-card">
-    <h2>➕ Yeni Hafta / Proje Klasoru Ekle</h2>
+    <h2>➕ Yeni Hafta / Proje Klasörü Ekle</h2>
     <form method="POST" class="form-row">
-      <input type="text" name="folder_name" placeholder="Orn: hafta1_giris veya odev2" required pattern="[a-zA-Z0-9_\-]+" title="Bosluksuz harf, rakam ve alt cizgi kullanin">
-      <button type="submit">Olustur ve Ac</button>
+      <input type="text" name="folder_name" placeholder="Örn: hafta1_giris veya odev2" required pattern="[a-zA-Z0-9_\-]+" title="Boşluksuz harf, rakam ve alt çizgi kullanın">
+      <button type="submit">Oluştur ve Aç</button>
     </form>
     <?php if ($msg): ?><p style="color:#ef4444; font-size:13px; margin-top:8px;"><?= htmlspecialchars($msg) ?></p><?php endif; ?>
   </div>
@@ -909,7 +972,7 @@ foreach ($items as $item) {
         cwd: stackDir(c, p),
         log: log);
     if (code == 0 && a.afterInfo != null) {
-      log('✔ ${a.afterInfo!.replaceAll('{name}', name ?? '')}');
+      log('✔ ${mapText(c.id, p.id, a.afterInfo!.replaceAll('{name}', name ?? ''))}');
     } else if (code != 0) {
       log('✖ İşlem başarısız (kod $code).');
     }
@@ -962,28 +1025,28 @@ foreach ($items as $item) {
     for (final p in pkgs) {
       for (final l in p.links) {
         sb.writeln(
-            "Set-Content -Path (Join-Path \$dir '${_ps(l.name)}.url') -Value \"[InternetShortcut]`nURL=${_ps(l.url)}`nIconFile=${_ps(icon)}`nIconIndex=0\"");
+            "Set-Content -Path (Join-Path \$dir '${_ps(l.name)}.url') -Value \"[InternetShortcut]`nURL=${_ps(mapText(course.id, p.id, l.url))}`nIconFile=${_ps(icon)}`nIconIndex=0\"");
       }
     }
 
     final infoText = [
       '============================================================',
-      '  MF Lab - Ders ve Calisma Ortami Bilgisi',
+      '  MF Lab - Ders ve Çalışma Ortamı Bilgisi',
       '============================================================',
       'Ders           : ${_ps(course.name)} (${_ps(course.id)})',
-      'MF Lab Surumu  : v${AppConfig.appVersion}',
+      'MF Lab Sürümü  : v${AppConfig.appVersion}',
       'Kurulum Tarihi : \$(Get-Date -Format "dd.MM.yyyy HH:mm:ss")',
-      'Gelistirici    : ${_ps(AppConfig.author)}',
+      'Geliştirici    : ${_ps(AppConfig.author)}',
       'GitHub         : ${_ps(AppConfig.repoUrl)}',
       '',
-      'Calisma Alani  : ${_ps(ws)}',
+      'Çalışma Alanı  : ${_ps(ws)}',
       'Konteyner Dizini: ${_ps(courseDir(course))}\\.stack',
       '',
-      'HIZLI ERISIM & KULLANIM:',
-      '1. "VS Code ile ac" kisayolu ile projeyi kodlamaya baslayabilirsin.',
-      '2. "${course.workspaceName} klasoru" icinde olusturdugun tum kodlar saklanir.',
-      '3. Servisleri baslatmak/durdurmak veya loglari gormek icin',
-      '   "MF Lab Yonetim Paneli" kisayolunu calistirabilirsin.',
+      'HIZLI ERİŞİM & KULLANIM:',
+      '1. "VS Code ile aç" kısayolu ile projeyi kodlamaya başlayabilirsin.',
+      '2. "${course.workspaceName} klasörü" içinde oluşturduğun tüm kodlar saklanır.',
+      '3. Servisleri başlatmak/durdurmak veya günlükleri görmek için',
+      '   "MF Lab Yönetim Paneli" kısayolunu çalıştırabilirsin.',
       '============================================================',
     ].join('`r`n');
 
@@ -1033,6 +1096,118 @@ GitHub         : ${AppConfig.repoUrl}
       }
     }
     return conflicts;
+  }
+
+  // -------------------------------------------------------- port eşlemeleri
+
+  /// "dersId/paketId" -> {orijinal port -> kullanılan port}. Yalnızca çakışma olan portlar yer alır.
+  static final Map<String, Map<int, int>> _portMaps = {};
+  static String get _portMapFile => '${AppConfig.baseDir}\\ports.json';
+
+  static Future<void> loadPortMaps() async {
+    _portMaps.clear();
+    try {
+      final f = File(_portMapFile);
+      if (!await f.exists()) return;
+      final j = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+      j.forEach((k, v) {
+        _portMaps[k] = (v as Map)
+            .map((a, b) => MapEntry(int.parse(a.toString()), (b as num).toInt()));
+      });
+    } catch (_) {}
+  }
+
+  static Future<void> _savePortMap(
+      String courseId, String pkgId, Map<int, int> map) async {
+    final key = '$courseId/$pkgId';
+    if (map.isEmpty) {
+      _portMaps.remove(key);
+    } else {
+      _portMaps[key] = map;
+    }
+    try {
+      await Directory(AppConfig.baseDir).create(recursive: true);
+      await File(_portMapFile).writeAsString(jsonEncode(_portMaps
+          .map((k, v) => MapEntry(k, v.map((a, b) => MapEntry('$a', b))))));
+    } catch (_) {}
+  }
+
+  /// Metindeki ":6306" gibi port gösterimlerini, o ders için seçilen gerçek portlarla değiştirir.
+  static String mapText(String courseId, String pkgId, String text) {
+    final map = _portMaps['$courseId/$pkgId'];
+    if (map == null || map.isEmpty) return text;
+    var out = text;
+    map.forEach((from, to) {
+      out = out.replaceAllMapped(
+          RegExp(':$from(?!\\d)'), (_) => ':$to');
+    });
+    return out;
+  }
+
+  /// Orijinal port için gerçekte kullanılan portu döner (eşleme yoksa aynısı).
+  static int effectivePort(int original) {
+    for (final m in _portMaps.values) {
+      final v = m[original];
+      if (v != null) return v;
+    }
+    return original;
+  }
+
+  static Future<int?> _findFreePort(Set<int> avoid) async {
+    for (var port = 6400; port < 7000; port++) {
+      if (avoid.contains(port)) continue;
+      if ((await findConflictingPorts([port])).isEmpty) return port;
+    }
+    return null;
+  }
+
+  /// [port]'u yayınlayan, adı `mflab-` ile başlayan (yani MF Lab'ın açtığı) konteynerleri durdurur.
+  /// Başkasının programlarına ve MF Lab'a ait olmayan konteynerlere dokunmaz.
+  static Future<void> _stopOwnContainersOnPort(int port, Log log) async {
+    try {
+      final r = await run('docker',
+          ['ps', '--filter', 'publish=$port', '--format', '{{.Names}}']);
+      for (final raw in (r.stdout as String).split('\n')) {
+        final name = raw.trim();
+        if (!name.startsWith('mflab-')) continue;
+        log('Port $port daha önce MF Lab tarafından açılmış ($name). Servis kapatılıyor...');
+        final stop = await run('docker', ['stop', name]);
+        log(stop.exitCode == 0
+            ? '  ✔ $name durduruldu.'
+            : '  ✖ $name durdurulamadı.');
+      }
+    } catch (_) {}
+  }
+
+  static HelpEntry? _portHelp(Catalog cat) =>
+      cat.help.where((h) => h.id == 'port').firstOrNull;
+
+  /// Portu hangi programın / konteynerin tuttuğunu insan okuyacak şekilde döner.
+  static Future<String> describePortUsers(int port) async {
+    final found = <String>[];
+    try {
+      final r = await run('powershell', [
+        '-NoProfile',
+        '-Command',
+        "Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue "
+            "| ForEach-Object { (Get-Process -Id \$_.OwningProcess -ErrorAction SilentlyContinue).ProcessName } "
+            "| Sort-Object -Unique"
+      ]);
+      found.addAll((r.stdout as String)
+          .split('\n')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty));
+    } catch (_) {}
+    try {
+      final r = await run(
+          'docker', ['ps', '--filter', 'publish=$port', '--format', '{{.Names}}']);
+      for (final n in (r.stdout as String).split('\n')) {
+        if (n.trim().isNotEmpty) found.add('Docker konteyneri: ${n.trim()}');
+      }
+    } catch (_) {}
+    return found.isEmpty
+        ? 'kullanan program tespit edilemedi (yönetici izni gerekebilir)'
+        : found.join(', ');
   }
 
   /// Konteyner içinde etkileşimli terminal (bash / sh) penceresi açar.

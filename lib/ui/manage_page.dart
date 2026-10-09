@@ -243,7 +243,8 @@ class _ServiceCard extends StatelessWidget {
                 if (e.running)
                   for (final l in e.pkg.links)
                     OutlinedButton.icon(
-                      onPressed: () => Engine.openUrl(l.url),
+                      onPressed: () => Engine.openUrl(
+                          Engine.mapText(e.course.id, e.pkg.id, l.url)),
                       icon: const Icon(Icons.public, size: 18),
                       label: Text(l.name),
                     ),
@@ -316,7 +317,7 @@ class _ServiceCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            SelectableText(e.pkg.info,
+            SelectableText(Engine.mapText(e.course.id, e.pkg.id, e.pkg.info),
                 style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
@@ -616,7 +617,8 @@ class _ServiceCard extends StatelessWidget {
                                                 tooltip: 'Tarayıcıda Çalıştır',
                                                 icon: const Icon(Icons.public, color: Colors.blue),
                                                 onPressed: () {
-                                                  final base = entry.pkg.links.first.url;
+                                                  final base = Engine.mapText(entry.course.id, entry.pkg.id,
+                                                      entry.pkg.links.first.url);
                                                   final target = p.isLaravel
                                                       ? '$base/${p.name}/public/'
                                                       : '$base/${p.name}/';
