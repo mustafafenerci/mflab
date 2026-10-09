@@ -37,7 +37,7 @@
 
 ---
 
-## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.1)
+## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.2)
 
 | Ders | Bileşenler | Portlar | Masaüstü Klasörü |
 | :--- | :--- | :--- | :--- |
@@ -51,7 +51,7 @@
 
 ### Yöntem 1: Kurulum Dosyası İle (Önerilen)
 1. **Setup Dosyasını İndirin:**  
-   [👉 **En Güncel MFLab-Setup.exe İndir (v1.1.1)**](https://github.com/mustafafenerci/mflab/releases/latest/download/MFLab-Setup.exe)
+   [👉 **En Güncel MFLab-Setup.exe İndir (v1.1.2)**](https://github.com/mustafafenerci/mflab/releases/latest/download/MFLab-Setup.exe)
 2. **Kurulumu Başlatın:**  
    `MFLab-Setup.exe` dosyasını çalıştırın ve kurulum sihirbazını tamamlayın.
 3. **Dersinizi Seçin ve Kur'a Basın:**  

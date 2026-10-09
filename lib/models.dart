@@ -110,9 +110,13 @@ class ProjectItem {
     required this.path,
     required this.modified,
     required this.isLaravel,
+    this.entry = '',
   });
   final String name;
   final String path;
   final DateTime modified;
   final bool isLaravel;
+
+  /// Projeyi tarayıcıda açmak için alt klasöre eklenecek yol ('public/', 'sayfa.php' veya '').
+  final String entry;
 }

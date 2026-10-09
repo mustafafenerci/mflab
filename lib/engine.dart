@@ -250,12 +250,47 @@ class Engine {
     }
   }
 
+  static const _portalVersion = 2;
+
+  static Future<String> _readmeTemplate() =>
+      rootBundle.loadString('assets/portal/README.template.md');
+
+  /// Proje README'si: ne yapıldı, nasıl kuruldu, nasıl olmalı + adres ve veritabanı bilgisi.
+  static Future<String> renderReadme(String name) async {
+    final web = effectivePort(6380);
+    final pma = effectivePort(6381);
+    final d = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return (await _readmeTemplate())
+        .replaceAll('{{NAME}}', name)
+        .replaceAll('{{URL}}', 'http://localhost:$web/$name/')
+        .replaceAll('{{PMA}}', 'http://localhost:$pma')
+        .replaceAll('{{DATE}}',
+            '${two(d.day)}.${two(d.month)}.${d.year} ${two(d.hour)}:${two(d.minute)}');
+  }
+
+  /// Portalı (htdocs/index.php) yazar. Yoksa veya MF Lab'a ait eski bir sürümse güncellenir;
+  /// öğrencinin kendi yazdığı bir ana sayfa varsa dokunulmaz.
+  static Future<void> _writePortal(String ws) async {
+    final f = File('$ws\\index.php');
+    if (await f.exists()) {
+      final cur = await f.readAsString();
+      final m = RegExp(r'mflab-portal:(\d+)').firstMatch(cur);
+      final ours = m != null ||
+          cur.contains('MF Lab çalışıyor!') ||
+          cur.contains('Akıllı Öğrenci Çalışma Portalı') ||
+          cur.contains('Akilli Ogrenci Calisma Portali');
+      if (!ours) return;
+      if (m != null && int.parse(m.group(1)!) >= _portalVersion) return;
+    }
+    final src = (await rootBundle.loadString('assets/portal/index.php'))
+        .replaceFirst('@@README_TEMPLATE@@', await _readmeTemplate());
+    await f.writeAsString(src);
+  }
+
   static Future<void> _seedWorkspace(Course c, String ws) async {
     if (c.workspaceName == 'htdocs') {
-      final f = File('$ws\\index.php');
-      if (!await f.exists()) {
-        await f.writeAsString(_htdocsPortalHtml);
-      }
+      await _writePortal(ws);
     } else if (c.workspaceName == 'proje') {
       final f = File('$ws\\index.html');
       if (!await f.exists() && (await Directory(ws).list().isEmpty)) {
@@ -280,11 +315,29 @@ class Engine {
           if (name.startsWith('.')) continue;
           final stat = await entity.stat();
           final isLaravel = await File('${entity.path}\\public\\index.php').exists();
+          var entry = isLaravel ? 'public/' : '';
+          if (!isLaravel) {
+            var hasIndex = false;
+            for (final n in ['index.php', 'index.html', 'index.htm']) {
+              if (await File('${entity.path}\\$n').exists()) hasIndex = true;
+            }
+            if (!hasIndex) {
+              await for (final e in entity.list(followLinks: false)) {
+                if (e is File &&
+                    RegExp(r'\.(php|html?)$', caseSensitive: false)
+                        .hasMatch(e.path)) {
+                  entry = e.uri.pathSegments.last;
+                  break;
+                }
+              }
+            }
+          }
           items.add(ProjectItem(
             name: name,
             path: entity.path,
             modified: stat.modified,
             isLaravel: isLaravel,
+            entry: entry,
           ));
         }
       }
@@ -418,6 +471,11 @@ try {
 </body>
 </html>
 ''');
+    }
+
+    if (template != 'laravel') {
+      await File('${targetDir.path}\\README.md')
+          .writeAsString(await renderReadme(clean));
     }
 
     log('✔ "$clean" projesi başarıyla oluşturuldu.');
@@ -676,140 +734,6 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
     log('✔ Docker önbellek temizliği tamamlandı.');
   }
 
-  static String get _htdocsPortalHtml => r'''<?php
-// MF Lab - Akıllı Öğrenci Çalışma Portalı
-$dbOk = false;
-$dbErr = '';
-try {
-    $pdo = new PDO("mysql:host=db;dbname=mflab;charset=utf8mb4", "root", "root", [PDO::ATTR_TIMEOUT => 2]);
-    $dbOk = true;
-} catch (Exception $e) {
-    $dbErr = $e->getMessage();
-}
-
-$msg = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['folder_name'])) {
-    $rawName = trim($_POST['folder_name']);
-    $folderName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $rawName);
-    if (!empty($folderName) && !is_dir($folderName)) {
-        mkdir($folderName, 0777, true);
-        $sampleCode = "<?php\n// Proje: {$folderName}\n?>\n<!DOCTYPE html>\n<html lang=\"tr\">\n<head>\n  <meta charset=\"UTF-8\">\n  <title>{$folderName}</title>\n  <style>body{font-family:sans-serif;padding:30px;line-height:1.6;background:#f8fafc;color:#1e293b;}.card{background:#fff;padding:24px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.05);max-width:600px;margin:0 auto;}</style>\n</head>\n<body>\n  <div class=\"card\">\n    <h2>🚀 {$folderName} Çalışıyor!</h2>\n    <p>Bu dosya: <code>htdocs/{$folderName}/index.php</code></p>\n    <p>PHP Sürümü: " . phpversion() . "</p>\n    <p><a href=\"../\">← MF Lab Portalına Dön</a></p>\n  </div>\n</body>\n</html>";
-        file_put_contents("{$folderName}/index.php", $sampleCode);
-        header("Location: {$folderName}/");
-        exit;
-    } else {
-        $msg = 'Klasör zaten mevcut veya geçersiz isim!';
-    }
-}
-
-$pmaPort = 6381;
-$portMap = @json_decode(@file_get_contents(__DIR__ . '/.mflab-ports.json'), true);
-if (is_array($portMap) && isset($portMap['6381'])) $pmaPort = (int)$portMap['6381'];
-
-$projects = [];
-$items = scandir('.');
-foreach ($items as $item) {
-    if ($item === '.' || $item === '..' || !is_dir($item) || $item[0] === '.') continue;
-    $targetUrl = $item . '/';
-    $isLaravel = false;
-    if (is_dir($item . '/public') && file_exists($item . '/public/index.php')) {
-        $targetUrl = $item . '/public/';
-        $isLaravel = true;
-    }
-    $mtime = filemtime($item);
-    $projects[] = [
-        'name' => $item,
-        'url' => $targetUrl,
-        'isLaravel' => $isLaravel,
-        'mtime' => date('d.m.Y H:i', $mtime),
-    ];
-}
-?>
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MF Lab - Öğrenci Portalı</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px 20px; line-height: 1.5; }
-    .container { max-width: 900px; margin: 0 auto; }
-    header { background: linear-gradient(135deg, #1e293b, #334155); padding: 28px; border-radius: 16px; border: 1px solid #475569; margin-bottom: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
-    h1 { font-size: 26px; color: #38bdf8; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
-    .status-bar { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; font-size: 13px; }
-    .badge { padding: 4px 10px; border-radius: 8px; background: #1e293b; border: 1px solid #475569; display: inline-flex; align-items: center; gap: 6px; }
-    .badge.success { border-color: #10b981; color: #34d399; }
-    .badge.warn { border-color: #f59e0b; color: #fbbf24; }
-    .badge a { color: inherit; text-decoration: none; font-weight: 600; }
-    .create-card { background: #1e293b; border: 1px solid #334155; padding: 20px; border-radius: 14px; margin-bottom: 24px; }
-    .create-card h2 { font-size: 17px; margin-bottom: 12px; color: #94a3b8; }
-    .form-row { display: flex; gap: 10px; }
-    input[type="text"] { flex: 1; padding: 10px 14px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #fff; font-size: 14px; }
-    input[type="text"]:focus { outline: none; border-color: #38bdf8; }
-    button { background: #0284c7; color: #fff; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; }
-    button:hover { background: #0369a1; }
-    .section-title { font-size: 18px; margin-bottom: 14px; color: #cbd5e1; display: flex; justify-content: space-between; align-items: center; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-    .project-card { background: #1e293b; border: 1px solid #334155; padding: 18px; border-radius: 12px; display: flex; flex-direction: column; justify-content: space-between; }
-    .project-card:hover { border-color: #38bdf8; }
-    .project-name { font-size: 17px; font-weight: 600; color: #f1f5f9; margin-bottom: 6px; word-break: break-all; }
-    .project-meta { font-size: 12px; color: #64748b; margin-bottom: 14px; }
-    .project-btn { display: inline-block; text-align: center; background: #334155; color: #38bdf8; text-decoration: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; border: 1px solid #475569; }
-    .project-btn:hover { background: #38bdf8; color: #0f172a; }
-    .empty-state { text-align: center; padding: 40px; background: #1e293b; border-radius: 12px; border: 1px dashed #475569; color: #94a3b8; }
-  </style>
-</head>
-<body>
-<div class="container">
-  <header>
-    <h1>🎓 MF Lab Öğrenci Portalı</h1>
-    <p style="color: #94a3b8; font-size: 14px;">Çalışma alanındaki projeleriniz ve haftalık ödevleriniz aşağıda listelenmiştir.</p>
-    <div class="status-bar">
-      <span class="badge success">✔ PHP <?= phpversion() ?></span>
-      <span class="badge <?= $dbOk ? 'success' : 'warn' ?>"><?= $dbOk ? '✔ MariaDB Bağlı' : '⚠️ MariaDB: ' . htmlspecialchars($dbErr) ?></span>
-      <span class="badge"><a href="http://localhost:<?= $pmaPort ?>" target="_blank">🐬 phpMyAdmin Aç (<?= $pmaPort ?>) ↗</a></span>
-      <span class="badge">📁 C:\MFLab\htdocs</span>
-    </div>
-  </header>
-
-  <div class="create-card">
-    <h2>➕ Yeni Hafta / Proje Klasörü Ekle</h2>
-    <form method="POST" class="form-row">
-      <input type="text" name="folder_name" placeholder="Örn: hafta1_giris veya odev2" required pattern="[a-zA-Z0-9_\-]+" title="Boşluksuz harf, rakam ve alt çizgi kullanın">
-      <button type="submit">Oluştur ve Aç</button>
-    </form>
-    <?php if ($msg): ?><p style="color:#ef4444; font-size:13px; margin-top:8px;"><?= htmlspecialchars($msg) ?></p><?php endif; ?>
-  </div>
-
-  <div class="section-title">
-    <span>📁 Projeleriniz (<?= count($projects) ?>)</span>
-    <span style="font-size: 12px; color: #64748b;">Dogrudan projeye gitmek icin tiklayin</span>
-  </div>
-
-  <?php if (empty($projects)): ?>
-    <div class="empty-state">
-      <p style="font-size: 16px; margin-bottom: 8px;">Henuz bir alt proje veya hafta klasoru eklenmedi.</p>
-      <p style="font-size: 13px;">Yukaridaki alandan <b>hafta1</b> gibi bir isim yazarak ilk projenizi baslatabilirsiniz.</p>
-    </div>
-  <?php else: ?>
-    <div class="grid">
-      <?php foreach ($projects as $p): ?>
-        <div class="project-card">
-          <div>
-            <div class="project-name">📁 <?= htmlspecialchars($p['name']) ?></div>
-            <div class="project-meta">Guncelleme: <?= $p['mtime'] ?><?= $p['isLaravel'] ? ' · <b style="color:#f43f5e;">Laravel</b>' : '' ?></div>
-          </div>
-          <a href="<?= htmlspecialchars($p['url']) ?>" class="project-btn">Projeyi Calistir ↗</a>
-        </div>
-      <?php endforeach; ?>
-    </div>
-  <?php endif; ?>
-</div>
-</body>
-</html>
-''';
-
   static Future<bool> isRunning(Course c, LabPackage p) async {
     final dir = stackDir(c, p);
     if (!await File('$dir\\compose.yml').exists()) return false;
@@ -822,6 +746,11 @@ foreach ($items as $item) {
       File('${stackDir(c, p)}\\compose.yml').exists();
 
   static Future<void> start(Course c, LabPackage p, Log log) async {
+    if (c.workspaceName == 'htdocs') {
+      try {
+        await _writePortal(workspaceDir(c));
+      } catch (_) {}
+    }
     await stream('docker', ['compose', 'up', '-d'],
         cwd: stackDir(c, p), log: log);
   }

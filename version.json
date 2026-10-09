@@ -1,6 +1,6 @@
 {
-  "version": "1.1.1",
+  "version": "1.1.2",
   "url": "https://github.com/mustafafenerci/mflab/releases/latest",
-  "notes": "Port cakismasinda otomatik bos porta gecis, Turkce karakter duzeltmesi ve Yapay zekaya sor ozelligi.",
+  "notes": "Ogrenci portali yenilendi: projeler otomatik listelenir, her projeye aciklamali README eklenir.",
   "mandatory": false
 }

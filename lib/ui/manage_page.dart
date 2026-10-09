@@ -619,9 +619,7 @@ class _ServiceCard extends StatelessWidget {
                                                 onPressed: () {
                                                   final base = Engine.mapText(entry.course.id, entry.pkg.id,
                                                       entry.pkg.links.first.url);
-                                                  final target = p.isLaravel
-                                                      ? '$base/${p.name}/public/'
-                                                      : '$base/${p.name}/';
+                                                  final target = '$base/${p.name}/${p.entry}';
                                                   Engine.openUrl(target);
                                                 },
                                               ),
