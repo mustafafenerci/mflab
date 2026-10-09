@@ -1,0 +1,357 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+
+import 'config.dart';
+import 'models.dart';
+
+typedef Log = void Function(String);
+
+class InstallResult {
+  InstallResult(this.ok, {this.help});
+  final bool ok;
+  final HelpEntry? help;
+}
+
+class Engine {
+  static String courseDir(Course c) => '${AppConfig.baseDir}\\${c.id}';
+  static String workspaceDir(Course c) =>
+      '${courseDir(c)}\\${c.workspaceName}';
+  static String stackDir(Course c, LabPackage p) =>
+      '${courseDir(c)}\\.stack\\${p.id}';
+
+  // ---------------------------------------------------------------- process
+
+  static Future<ProcessResult> run(String cmd, List<String> args,
+      {String? cwd}) {
+    return Process.run(cmd, args,
+        workingDirectory: cwd,
+        runInShell: true,
+        stdoutEncoding: utf8,
+        stderrEncoding: utf8);
+  }
+
+  /// Komutu çalıştırır, çıktıyı canlı olarak [log]'a akıtır ve tüm çıktıyı döner.
+  static Future<(int, String)> stream(String cmd, List<String> args,
+      {String? cwd, required Log log}) async {
+    final buf = StringBuffer();
+    final proc = await Process.start(cmd, args,
+        workingDirectory: cwd, runInShell: true);
+    final done = <Future<void>>[];
+    for (final s in [proc.stdout, proc.stderr]) {
+      final c = Completer<void>();
+      done.add(c.future);
+      s.transform(const Utf8Decoder(allowMalformed: true)).listen((d) {
+        buf.write(d);
+        final t = d.trim();
+        if (t.isNotEmpty) log(t);
+      }, onDone: c.complete);
+    }
+    await Future.wait(done);
+    final code = await proc.exitCode;
+    return (code, buf.toString());
+  }
+
+  static Future<bool> commandOk(String command) async {
+    try {
+      final parts = command.split(' ');
+      final r = await run(parts.first, parts.skip(1).toList());
+      return r.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> dockerInstalled() => commandOk('docker --version');
+  static Future<bool> dockerRunning() => commandOk('docker info');
+
+  static Future<void> openUrl(String url) async {
+    await run('cmd', ['/c', 'start', '', url]);
+  }
+
+  static Future<void> openFolder(String path) async {
+    await Directory(path).create(recursive: true);
+    await Process.start('explorer', [path], runInShell: true);
+  }
+
+  static Future<void> openInVsCode(String path) async {
+    await Directory(path).create(recursive: true);
+    await run('code', [_q(path)]);
+  }
+
+  static String _q(String s) => '"$s"';
+
+  // -------------------------------------------------------------- help/errs
+
+  static HelpEntry? helpFor(Catalog cat, String output) {
+    final low = output.toLowerCase();
+    for (final h in cat.help) {
+      if (h.match.any((m) => low.contains(m.toLowerCase()))) return h;
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------------ tools
+
+  static Future<bool> ensureTool(LabPackage p, Log log) async {
+    log('${p.name} kontrol ediliyor...');
+    if (await commandOk(p.check!)) {
+      log('✔ ${p.name} kurulu.');
+      return true;
+    }
+    log('✖ ${p.name} bulunamadı. İndirme sayfası açılıyor: ${p.downloadUrl}');
+    log('Kurulumu bitirdikten sonra bu uygulamada "Kur" düğmesine tekrar bas.');
+    await openUrl(p.downloadUrl!);
+    return false;
+  }
+
+  static Future<void> installExtensions(List<String> ids, Log log) async {
+    if (ids.isEmpty) return;
+    if (!await commandOk('code --version')) {
+      log('VS Code komutu bulunamadı, eklentiler atlandı.');
+      return;
+    }
+    log('VS Code eklentileri kuruluyor...');
+    for (final e in ids) {
+      final r = await run('code', ['--install-extension', e, '--force']);
+      log(r.exitCode == 0 ? '  ✔ $e' : '  ✖ $e kurulamadı');
+    }
+  }
+
+  // ----------------------------------------------------------------- docker
+
+  static Future<InstallResult> installDocker(
+      Catalog cat, Course course, LabPackage p, Log log) async {
+    if (!await dockerInstalled()) {
+      log('✖ Docker bulunamadı. Önce Docker Desktop kurulmalı.');
+      return InstallResult(false);
+    }
+    if (!await dockerRunning()) {
+      log('Docker çalışmıyor, Docker Desktop başlatılmaya çalışılıyor...');
+      await _tryStartDockerDesktop();
+      var ok = false;
+      for (var i = 0; i < 24 && !ok; i++) {
+        await Future.delayed(const Duration(seconds: 5));
+        ok = await dockerRunning();
+        if (!ok) log('Docker bekleniyor... (${(i + 1) * 5} sn)');
+      }
+      if (!ok) {
+        log('✖ Docker başlamadı.');
+        return InstallResult(false,
+            help: helpFor(cat, 'error during connect docker daemon'));
+      }
+    }
+
+    final stack = stackDir(course, p);
+    final ws = workspaceDir(course);
+    await Directory(stack).create(recursive: true);
+    await Directory(ws).create(recursive: true);
+
+    await File('$stack\\compose.yml')
+        .writeAsString(await rootBundle.loadString(p.compose!));
+    await File('$stack\\.env')
+        .writeAsString('WORKSPACE=${ws.replaceAll('\\', '/')}\n');
+    if (p.buildContext != null) {
+      final dir = Directory('$stack\\php-web');
+      await dir.create(recursive: true);
+      await File('${dir.path}\\Dockerfile')
+          .writeAsString(await rootBundle.loadString(p.buildContext!));
+    }
+    await _seedWorkspace(course, ws);
+
+    log('Konteynerler indiriliyor ve başlatılıyor (ilk seferde birkaç dakika sürebilir)...');
+    var (code, out) =
+        await stream('docker', ['compose', 'up', '-d'], cwd: stack, log: log);
+    if (code != 0 && p.buildContext != null) {
+      log('Hazır imaj indirilemedi, imaj bu bilgisayarda derleniyor (5-10 dk sürebilir)...');
+      (code, out) = await stream(
+          'docker', ['compose', 'up', '-d', '--build'],
+          cwd: stack, log: log);
+    }
+    if (code != 0) {
+      log('✖ Kurulum başarısız (kod $code).');
+      return InstallResult(false, help: helpFor(cat, out));
+    }
+    log('✔ ${p.name} hazır.');
+    log(p.info);
+    return InstallResult(true);
+  }
+
+  static Future<void> _tryStartDockerDesktop() async {
+    final candidates = [
+      r'C:\Program Files\Docker\Docker\Docker Desktop.exe',
+      '${Platform.environment['LOCALAPPDATA']}\\Programs\\Docker\\Docker\\Docker Desktop.exe',
+    ];
+    for (final c in candidates) {
+      if (await File(c).exists()) {
+        await Process.start(c, [], mode: ProcessStartMode.detached);
+        return;
+      }
+    }
+  }
+
+  static Future<void> _seedWorkspace(Course c, String ws) async {
+    if (c.workspaceName == 'htdocs') {
+      final f = File('$ws\\index.php');
+      if (!await f.exists() && (await Directory(ws).list().isEmpty)) {
+        await f.writeAsString('<?php\n'
+            'echo "<h1>MF Lab çalışıyor!</h1>";\n'
+            'echo "<p>PHP sürümü: " . phpversion() . "</p>";\n'
+            r'try { $pdo = new PDO("mysql:host=db;dbname=mflab", "root", "root"); '
+            'echo "<p>MariaDB bağlantısı: başarılı ✔</p>"; } '
+            'catch (Exception \$e) { echo "<p>MariaDB bağlantısı: " . \$e->getMessage() . "</p>"; }\n');
+      }
+    } else if (c.workspaceName == 'proje') {
+      final f = File('$ws\\index.html');
+      if (!await f.exists() && (await Directory(ws).list().isEmpty)) {
+        await f.writeAsString('<!DOCTYPE html>\n<html lang="tr">\n<head>\n'
+            '  <meta charset="UTF-8">\n  <title>İlk Sayfam</title>\n</head>\n'
+            '<body>\n  <h1>Merhaba MF Lab!</h1>\n</body>\n</html>\n');
+      }
+    }
+  }
+
+  static Future<bool> isRunning(Course c, LabPackage p) async {
+    final dir = stackDir(c, p);
+    if (!await File('$dir\\compose.yml').exists()) return false;
+    final r = await run('docker', ['compose', 'ps', '--status', 'running', '-q'],
+        cwd: dir);
+    return r.exitCode == 0 && (r.stdout as String).trim().isNotEmpty;
+  }
+
+  static Future<bool> isInstalled(Course c, LabPackage p) async =>
+      File('${stackDir(c, p)}\\compose.yml').exists();
+
+  static Future<void> start(Course c, LabPackage p, Log log) async {
+    await stream('docker', ['compose', 'up', '-d'],
+        cwd: stackDir(c, p), log: log);
+  }
+
+  static Future<void> stop(Course c, LabPackage p, Log log) async {
+    await stream('docker', ['compose', 'stop'], cwd: stackDir(c, p), log: log);
+  }
+
+  /// Konteynerleri siler; veritabanı volume'ları ve çalışma klasörü korunur.
+  static Future<void> remove(Course c, LabPackage p, Log log) async {
+    await stream('docker', ['compose', 'down'], cwd: stackDir(c, p), log: log);
+  }
+
+  static Future<void> runAction(
+      Course c, LabPackage p, PackageAction a, String? name, Log log) async {
+    final cmd = a.command.replaceAll('{name}', name ?? '');
+    log('Çalıştırılıyor: $cmd');
+    final (code, _) = await stream(
+        'docker',
+        ['compose', 'exec', '-T', a.service, 'sh', '-c', cmd],
+        cwd: stackDir(c, p),
+        log: log);
+    if (code == 0 && a.afterInfo != null) {
+      log('✔ ${a.afterInfo!.replaceAll('{name}', name ?? '')}');
+    } else if (code != 0) {
+      log('✖ İşlem başarısız (kod $code).');
+    }
+  }
+
+  // -------------------------------------------------------------- shortcuts
+
+  static String _ps(String s) => s.replaceAll("'", "''");
+
+  static Future<String> _ensureIcon() async {
+    final path = '${AppConfig.baseDir}\\mflab.ico';
+    await Directory(AppConfig.baseDir).create(recursive: true);
+    final data = await rootBundle.load('assets/images/app_icon.ico');
+    await File(path).writeAsBytes(data.buffer.asUint8List());
+    return path;
+  }
+
+  /// Masaüstünde `MF Lab - ders adı` klasörü ve içinde kısayollar oluşturur.
+  static Future<void> createShortcuts(
+      Course course, List<LabPackage> pkgs, Log log) async {
+    final icon = await _ensureIcon();
+    final ws = workspaceDir(course);
+    await Directory(ws).create(recursive: true);
+    final hasCode = pkgs.any((p) => p.id == 'vscode');
+
+    final sb = StringBuffer()
+      ..writeln(r"$desktop = [Environment]::GetFolderPath('Desktop')")
+      ..writeln(
+          "\$dir = Join-Path \$desktop '${_ps('MF Lab - ${course.name}')}'")
+      ..writeln(r'New-Item -ItemType Directory -Force $dir | Out-Null')
+      ..writeln(r'$sh = New-Object -ComObject WScript.Shell')
+      ..writeln(r'function Lnk($name, $target, $arguments, $style) {')
+      ..writeln(r'  $l = $sh.CreateShortcut((Join-Path $dir ($name + ".lnk")))')
+      ..writeln(r'  $l.TargetPath = $target')
+      ..writeln(r'  if ($arguments) { $l.Arguments = $arguments }')
+      ..writeln(r'  if ($style) { $l.WindowStyle = $style }')
+      ..writeln("  \$l.IconLocation = '${_ps(icon)}'")
+      ..writeln(r'  $l.Save()')
+      ..writeln(r'}')
+      ..writeln(
+          "Lnk '${_ps(course.workspaceName)} klasörü' '${_ps(ws)}' \$null \$null");
+    if (hasCode) {
+      sb.writeln(
+          "Lnk 'VS Code ile aç' 'cmd.exe' '/c code \"${_ps(ws)}\"' 7");
+    }
+    for (final p in pkgs) {
+      for (final l in p.links) {
+        sb.writeln(
+            "Set-Content -Path (Join-Path \$dir '${_ps(l.name)}.url') -Value \"[InternetShortcut]`nURL=${_ps(l.url)}`nIconFile=${_ps(icon)}`nIconIndex=0\"");
+      }
+    }
+
+    final tmp = File('${Directory.systemTemp.path}\\mflab_shortcuts.ps1');
+    await tmp.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(sb.toString())]);
+    final r = await run('powershell', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      _q(tmp.path)
+    ]);
+    log(r.exitCode == 0
+        ? '✔ Masaüstüne "MF Lab - ${course.name}" klasörü ve kısayollar eklendi.'
+        : '✖ Kısayollar oluşturulamadı: ${r.stderr}');
+  }
+
+  // ----------------------------------------------------------------- update
+
+  static List<int> _ver(String v) => v
+      .replaceFirst(RegExp(r'^v'), '')
+      .split('.')
+      .map((e) => int.tryParse(e) ?? 0)
+      .toList();
+
+  static bool isNewer(String remote, String local) {
+    final a = _ver(remote), b = _ver(local);
+    for (var i = 0; i < 3; i++) {
+      final x = i < a.length ? a[i] : 0, y = i < b.length ? b[i] : 0;
+      if (x != y) return x > y;
+    }
+    return false;
+  }
+
+  /// GitHub'daki version.json'ı okur; yeni sürüm varsa döner.
+  static Future<UpdateInfo?> checkUpdate() async {
+    try {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 6);
+      final req = await client.getUrl(Uri.parse(AppConfig.versionJsonUrl));
+      final res = await req.close().timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) return null;
+      final body = await res.transform(utf8.decoder).join();
+      final j = jsonDecode(body) as Map<String, dynamic>;
+      final v = j['version'] as String;
+      if (!isNewer(v, AppConfig.appVersion)) return null;
+      return UpdateInfo(
+        v,
+        (j['url'] ?? AppConfig.releasesUrl) as String,
+        (j['notes'] ?? '') as String,
+        (j['mandatory'] ?? false) as bool,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}

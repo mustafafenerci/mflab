@@ -1,0 +1,10 @@
+{
+  "id": "git",
+  "name": "Git",
+  "type": "tool",
+  "check": "git --version",
+  "downloadUrl": "https://git-scm.com/download/win",
+  "why": "Git, kodunun sürümlerini saklayan ve ekip çalışmasını sağlayan araçtır. Laravel ve Composer paketleri de Git ile çalışır. GitHub'a kod göndermek için gereklidir.",
+  "steps": ["Git kurulu mu kontrol ediliyor"],
+  "info": "Kurulu değilse indirme sayfası açılır. Kurulumda varsayılan seçenekler yeterlidir."
+}

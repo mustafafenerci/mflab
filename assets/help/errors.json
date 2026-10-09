@@ -1,0 +1,44 @@
+[
+  {
+    "match": ["port is already allocated", "address already in use", "Only one usage of each socket", "ports are not available"],
+    "title": "Port çakışması",
+    "explain": "Bilgisayarındaki başka bir program (XAMPP, WAMP, Skype, başka bir veritabanı vb.) aynı portu kullanıyor. Bir port, bilgisayarda bir uygulamaya açılan numaralı kapı gibidir ve aynı anda tek program kullanabilir. Çakışan programı kapat veya durdur, sonra tekrar dene.",
+    "url": "https://docs.docker.com/engine/network/port-publishing/"
+  },
+  {
+    "match": ["error during connect", "Cannot connect to the Docker daemon", "docker daemon is not running", "failed to connect to the docker API", "pipe/docker"],
+    "title": "Docker çalışmıyor",
+    "explain": "Docker kurulu ama başlatılmamış. Başlat menüsünden Docker Desktop'ı aç, sol altta yeşil 'Engine running' yazısını bekle, sonra tekrar dene.",
+    "url": "https://docs.docker.com/desktop/troubleshoot-and-support/troubleshoot/"
+  },
+  {
+    "match": ["no such host", "TLS handshake timeout", "i/o timeout", "Temporary failure in name resolution", "dial tcp", "net/http"],
+    "title": "İnternet bağlantısı sorunu",
+    "explain": "İmajlar internetten indirilir. Bağlantın kopmuş veya okul ağı Docker'ın adreslerini engelliyor olabilir. Bağlantını kontrol et ve tekrar dene.",
+    "url": "https://docs.docker.com/engine/containers/run/"
+  },
+  {
+    "match": ["no space left on device", "disk is full"],
+    "title": "Disk dolu",
+    "explain": "İmajlar için yeterli disk alanı yok. Gereksiz dosyaları sil. Docker Desktop > Settings > Resources bölümünden Docker'ın disk kullanımına bakabilirsin.",
+    "url": "https://docs.docker.com/engine/manage-resources/pruning/"
+  },
+  {
+    "match": ["pull access denied", "manifest unknown", "not found: manifest", "repository does not exist"],
+    "title": "İmaj bulunamadı",
+    "explain": "İstenen Docker imajı indirilemedi. Genellikle imaj henüz yayınlanmamıştır. Uygulama bu durumda imajı kendi bilgisayarında derlemeyi dener. Hâlâ başarısızsa hocana haber ver.",
+    "url": "https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-an-image/"
+  },
+  {
+    "match": ["WSL", "virtualization", "Hyper-V", "HCS"],
+    "title": "Sanallaştırma / WSL2 sorunu",
+    "explain": "Docker Desktop, Windows'ta WSL2 veya sanallaştırmaya ihtiyaç duyar. BIOS'ta sanallaştırmanın (Intel VT-x / AMD-V) açık olduğundan ve WSL2'nin kurulu olduğundan emin ol.",
+    "url": "https://learn.microsoft.com/tr-tr/windows/wsl/install"
+  },
+  {
+    "match": ["invalid mount config", "drive is not shared", "Mounts denied", "mkdir"],
+    "title": "Klasör bağlama sorunu",
+    "explain": "Çalışma klasörün Docker'a bağlanamadı. Klasör yolunda sorun olabilir. Docker Desktop açıkken tekrar dene.",
+    "url": "https://docs.docker.com/engine/storage/bind-mounts/"
+  }
+]

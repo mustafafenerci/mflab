@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: flutter build windows --release
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$v" installer\mflab.iss
+      - name: Checksum
+        shell: pwsh
+        run: |
+          $h = (Get-FileHash dist\MFLab-Setup.exe -Algorithm SHA256).Hash.ToLower()
+          "$h  MFLab-Setup.exe" | Out-File dist\MFLab-Setup.exe.sha256 -Encoding ascii
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/MFLab-Setup.exe
+            dist/MFLab-Setup.exe.sha256
+          generate_release_notes: true

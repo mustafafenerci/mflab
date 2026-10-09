@@ -1,0 +1,10 @@
+{
+  "id": "docker",
+  "name": "Docker Desktop",
+  "type": "tool",
+  "check": "docker --version",
+  "downloadUrl": "https://www.docker.com/products/docker-desktop/",
+  "why": "Docker, yazılımları 'konteyner' denilen yalıtılmış kutularda çalıştırır. Böylece herkesin bilgisayarında aynı ortam olur ve kurulum kolaylaşır.",
+  "steps": ["Docker kurulu mu kontrol ediliyor"],
+  "info": "Kurulu değilse indirme sayfası açılır. Kurulumdan sonra bilgisayarı yeniden başlatman gerekebilir."
+}

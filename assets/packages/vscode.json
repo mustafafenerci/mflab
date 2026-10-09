@@ -1,0 +1,10 @@
+{
+  "id": "vscode",
+  "name": "Visual Studio Code",
+  "type": "tool",
+  "check": "code --version",
+  "downloadUrl": "https://code.visualstudio.com/download",
+  "why": "Kod yazmak için bir kod editörüne ihtiyacın var. VS Code ücretsizdir, PHP, SQL ve birçok dil için eklentileri vardır.",
+  "steps": ["VS Code kurulu mu kontrol ediliyor"],
+  "info": "Kurulu değilse indirme sayfası açılır."
+}

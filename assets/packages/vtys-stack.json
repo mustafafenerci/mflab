@@ -1,0 +1,22 @@
+{
+  "id": "vtys-stack",
+  "name": "PostgreSQL + pgAdmin + MariaDB + phpMyAdmin",
+  "type": "docker",
+  "compose": "assets/compose/vtys.yml",
+  "workspaceName": "sql",
+  "ports": [5432, 5050, 3307, 8082],
+  "links": [
+    {"name": "pgAdmin", "url": "http://localhost:5050"},
+    {"name": "phpMyAdmin", "url": "http://localhost:8082"}
+  ],
+  "actions": [],
+  "why": "Veritabanı dersinde SQL yazıp çalıştırmak için veritabanı sunucularına ihtiyacın var. PostgreSQL güçlü ve yaygın bir ilişkisel veritabanıdır, MariaDB (MySQL uyumlu) web dünyasında çok kullanılır. pgAdmin ve phpMyAdmin ile tabloları ve sorguları görsel arayüzde yönetirsin. İki sistemi karşılaştırarak öğrenebilirsin.",
+  "steps": [
+    "Docker çalışıyor mu kontrol ediliyor",
+    "Çalışma klasörün (sql) hazırlanıyor",
+    "İmajlar indiriliyor (hazır yazılım paketleri)",
+    "Konteynerler başlatılıyor",
+    "Masaüstü kısayolları oluşturuluyor"
+  ],
+  "info": "pgAdmin: http://localhost:5050 (e-posta: admin@mflab.local, şifre: admin) | PostgreSQL: localhost:5432 (kullanıcı: postgres, şifre: postgres) | phpMyAdmin: http://localhost:8082 | MariaDB: localhost:3307 (kullanıcı: root, şifre: root) | .sql dosyaların konteynerde /sql klasöründe görünür"
+}

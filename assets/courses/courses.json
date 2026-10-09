@@ -1,0 +1,46 @@
+[
+  {
+    "id": "web-tasarimi",
+    "name": "Web Tasarımı",
+    "description": "HTML, CSS ve JavaScript için VS Code ve eklentileri. Docker gerekmez.",
+    "icon": "palette",
+    "workspaceName": "proje",
+    "packages": ["vscode"],
+    "extensions": [
+      "ritwickdey.LiveServer",
+      "esbenp.prettier-vscode",
+      "formulahendry.auto-rename-tag",
+      "formulahendry.auto-close-tag",
+      "pranaygp.vscode-css-peek"
+    ]
+  },
+  {
+    "id": "web-programlama-2",
+    "name": "Web Programlama II",
+    "description": "PHP, MariaDB, phpMyAdmin, Composer, Git, Node.js ve Laravel ortamı.",
+    "icon": "code",
+    "workspaceName": "htdocs",
+    "packages": ["docker", "vscode", "git", "web2-stack"],
+    "extensions": [
+      "bmewburn.vscode-intelephense-client",
+      "xdebug.php-debug",
+      "laravel.vscode-laravel",
+      "onecentlin.laravel-blade",
+      "esbenp.prettier-vscode",
+      "ritwickdey.LiveServer"
+    ]
+  },
+  {
+    "id": "veritabani-yonetim-sistemleri",
+    "name": "Veritabanı Yönetim Sistemleri",
+    "description": "PostgreSQL ve MariaDB sunucuları, pgAdmin ve phpMyAdmin.",
+    "icon": "storage",
+    "workspaceName": "sql",
+    "packages": ["docker", "vscode", "vtys-stack"],
+    "extensions": [
+      "mtxr.sqltools",
+      "mtxr.sqltools-driver-pg",
+      "mtxr.sqltools-driver-mysql"
+    ]
+  }
+]
