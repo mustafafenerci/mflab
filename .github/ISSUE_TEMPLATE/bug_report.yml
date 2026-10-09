@@ -1,0 +1,67 @@
+name: 🐛 Hata Bildirimi (Bug Report)
+description: MF Lab uygulamasında bir sorun veya hata ile karşılaştıysanız bildirin
+title: "[HATA]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        MF Lab'i daha iyi hale getirmemize yardımcı olduğunuz için teşekkürler!
+        Lütfen aşağıdaki alanları mümkün olduğunca ayrıntılı doldurun.
+  - type: input
+    id: version
+    attributes:
+      label: MF Lab Sürümü
+      description: Kullandığınız MF Lab sürümü (ör. v1.0.0)
+      placeholder: v1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Windows Sürümü
+      options:
+        - Windows 11 (64-bit)
+        - Windows 10 (64-bit)
+        - Diğer / Sanal Makine
+    validations:
+      required: true
+  - type: dropdown
+    id: course
+    attributes:
+      label: İlgili Ders
+      options:
+        - Web Programlama II (Apache, PHP 8.3, MariaDB, phpMyAdmin)
+        - Veritabanı Yönetim Sistemleri (PostgreSQL, pgAdmin, MariaDB)
+        - Web Tasarımı (VS Code, eklentiler)
+        - Genel / Kurulum / Arayüz
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Sorunun Açıklaması
+      description: Ne yapmaya çalışırken bu hatayı aldınız?
+      placeholder: "Örn: Web Programlama II dersini kurarken servisler başlatılamadı..."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Hatayı Tekrarlama Adımları
+      description: Hatayı yeniden oluşturmak için izlenen adımlar
+      placeholder: |
+        1. MF Lab'i açtım
+        2. Ders listesinden 'Web Programlama II' seçtim
+        3. 'Kur' butonuna bastım
+        4. Hata mesajı çıktı...
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Hata Çıktısı veya Loglar
+      description: Uygulamada veya terminalde gördüğünüz tam hata metnini buraya yapıştırın
+      render: shell
+    validations:
+      required: false

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Katkı Rehberi (CONTRIBUTING)
+    url: https://github.com/mustafafenerci/mflab/blob/main/CONTRIBUTING.md
+    about: MF Lab projesine nasıl katkı verileceğini ve Pull Request açılacağını öğrenin.
+  - name: 📖 Proje Belgeleri
+    url: https://github.com/mustafafenerci/mflab/blob/main/README.md
+    about: Kurulum, kullanım ve mimari hakkında ayrıntılı bilgi edinin.

@@ -1,78 +1,109 @@
 # MF Lab
 
-<p align="center"><img src="assets/images/logo.png" width="140" alt="MF Lab logosu"></p>
+<p align="center">
+  <img src="assets/images/logo.png" width="160" alt="MF Lab Logosu">
+</p>
 
-**MF Lab**, öğrencilerin ders için gereken yazılımları (Apache, PHP, MariaDB, PostgreSQL, Composer, Git, VS Code ve eklentileri) **tek yerden, ne yaptığını anlayarak** kurmasını sağlayan bir Windows uygulamasıdır.
+<p align="center">
+  <strong>Öğrenciler için Tek Tıkla Ders Ortamı Kurucusu ve Yönetim Aracı</strong><br>
+  <em>Geliştirici & Eğitmen: Mustafa Fenerci</em>
+</p>
 
-- Dersini seç, kurulacak yazılımları ve **neden kurulduğunu** oku.
-- Sunucu yazılımları **Docker** konteynerlerinde çalışır: herkeste aynı ortam, bilgisayar temiz kalır.
-- Çalışma klasörün (`htdocs` gibi) Windows'ta durur, konteynere bağlıdır.
-- Masaüstüne kısayollar eklenir (klasör, VS Code, phpMyAdmin, pgAdmin, siteni aç).
-- Hata olursa nedeni ve resmi kaynak bağlantısı gösterilir.
-- Uygulama kapansa da servisler çalışmaya devam eder. Başlat/durdur "Yönetim" sayfasındadır.
+<p align="center">
+  <a href="https://github.com/mustafafenerci/mflab/actions/workflows/ci.yml"><img src="https://github.com/mustafafenerci/mflab/actions/workflows/ci.yml/badge.svg" alt="CI Durumu"></a>
+  <a href="https://github.com/mustafafenerci/mflab/releases/latest"><img src="https://img.shields.io/github/v/release/mustafafenerci/mflab?style=flat-square&color=blue" alt="Son Sürüm"></a>
+  <a href="https://github.com/mustafafenerci/mflab/pkgs/container/mflab-php-web"><img src="https://img.shields.io/badge/Docker%20Image-GHCR%20(Public)-blue?logo=docker" alt="Docker İmajı"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Lisans-MIT-green.svg?style=flat-square" alt="Lisans"></a>
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011%20(64--bit)-0078D6?logo=windows" alt="Platform">
+</p>
 
-## Dersler (v1.0)
+---
 
-| Ders | Kurulanlar |
-|---|---|
-| Web Tasarımı | VS Code + HTML/CSS/JS eklentileri (Docker gerekmez) |
-| Web Programlama II | Docker, VS Code, Git, Apache + PHP 8.3 + Composer + Node.js, MariaDB, phpMyAdmin, Laravel desteği |
-| Veritabanı Yönetim Sistemleri | Docker, VS Code, PostgreSQL + pgAdmin, MariaDB + phpMyAdmin |
+## 💡 MF Lab Nedir?
 
-## Öğrenci için kurulum
+**MF Lab**, üniversite ve lise öğrencilerinin yazılım dersleri için gereken karmaşık ortamları (Apache, PHP 8.3, MariaDB, PostgreSQL, Composer, Git, Node.js, VS Code ve eklentileri) **tek bir tıkla, bilgisayarlarını kirletmeden ve neyin neden kurulduğunu öğrenerek** kurmalarını sağlayan modern bir Windows masaüstü uygulamasıdır.
 
-1. [Releases](https://github.com/mustafafenerci/mflab/releases/latest) sayfasından `MFLab-Setup.exe` dosyasını indir ve çalıştır.
-2. MF Lab'i aç, dersini seç, **Kur**'a bas.
-3. Docker yoksa uygulama indirme sayfasını açar. Docker Desktop'ı kurup tekrar **Kur**'a bas.
+### ✨ Temel Özellikler
+* 🐳 **Docker İle Temiz Sistem:** Web sunucusu ve veritabanları izole Docker konteynerlerinde çalışır. Bilgisayarınızda çakışma yaratmaz, sisteminizi yormaz.
+* 🛡️ **Çakışmasız Port Standardı (63xx Serisi):** Bilgisayarınızda yerel MySQL, SQL Server veya IIS olsa dahi çakışma yaşanmaz. Tüm servisler garanti `63xx` port serisinde çalışır.
+* 📂 **Kalıcı Çalışma Klasörleri:** Yazdığınız tüm kodlar (`htdocs` vb.) ve veritabanı tablolarınız Windows üzerinde `C:\MFLab` dizininde güvende kalır.
+* 🖥️ **Masaüstü Kısayolları:** Kurulum tamamlandığında masaüstünüze doğrudan ilgili klasörü açan, VS Code'u başlatan ve phpMyAdmin/pgAdmin panellerine giden hazır kısayollar bırakılır.
+* 🔍 **Pedagojik ve Anlaşılır:** Her paketin yanında *"Bu yazılım neden kuruluyor?"* açıklaması bulunur. Hata durumunda neden kaynaklandığı ve çözüm yolu gösterilir.
+* ⚙️ **Kalıcı Ayarlar:** Öğrenci adı, tema tercihi ve son açılan ders bilgileri `C:\MFLab\settings.json` dosyasında güvenle saklanır.
 
-> Docker için bilgisayarda sanallaştırma açık olmalı (WSL2). Önerilen: en az 8 GB RAM.
+---
 
-## Geliştirme
+## 🎓 Desteklenen Dersler ve Servis Portları (v1.0.0)
 
-Gereksinimler: Flutter (Windows desktop), Docker.
+| Ders | Bileşenler | Portlar | Masaüstü Klasörü |
+| :--- | :--- | :--- | :--- |
+| **Web Tasarımı** | VS Code + HTML, CSS, JavaScript, Live Server eklentileri | *(Docker gerekmez)* | `WebTasarimi` |
+| **Web Programlama II** | Docker, VS Code, Git, Apache + PHP 8.3 + Composer + Node.js 22, MariaDB 11, phpMyAdmin | **Apache:** `http://localhost:6380`<br>**phpMyAdmin:** `http://localhost:6381`<br>**MariaDB:** `localhost:6306` | `WebProgramlama2` |
+| **Veritabanı Yönetim Sistemleri** | Docker, VS Code, PostgreSQL 16 + pgAdmin 4, MariaDB 11 + phpMyAdmin | **PostgreSQL:** `localhost:6332`<br>**pgAdmin:** `http://localhost:6350`<br>**MariaDB:** `localhost:6307`<br>**phpMyAdmin:** `http://localhost:6382` | `VTYS` |
+
+---
+
+## 📥 Öğrenciler İçin Kurulum (Hızlı Başlangıç)
+
+1. **Setup Dosyasını İndirin:**  
+   [👉 En Güncel MF Lab Setup Dosyasını İndir (v1.0.0)](https://github.com/mustafafenerci/mflab/releases/latest/download/MFLab-Setup.exe)
+2. **Kurulumu Başlatın:**  
+   `MFLab-Setup.exe` dosyasını çalıştırın ve kurulum sihirbazını tamamlayın.
+3. **Dersinizi Seçin ve Kur'a Basın:**  
+   Masaüstündeki **MF Lab** kısayolundan uygulamayı açın, aldığınız dersi seçip **"Kur"** butonuna basın.
+4. **Çalışmaya Başlayın:**  
+   Kurulum bittiğinde masaüstünüze gelen kısayollarla kodunuzu yazabilir ve web sitenizi görüntüleyebilirsiniz!
+
+> **Not (Docker Desktop):** Web Programlama ve Veritabanı dersleri için bilgisayarınızda [Docker Desktop](https://www.docker.com/products/docker-desktop/) kurulu ve çalışır durumda olmalıdır. Docker kurulu değilse MF Lab sizi otomatik olarak bilgilendirir.
+
+---
+
+## 👨‍💻 Geliştiriciler ve Eğitmenler İçin
+
+MF Lab, **Flutter Desktop (Windows)** ile geliştirilmiş olup arkasında Inno Setup ve GitHub Actions CI/CD otomasyonu barındırır.
+
+### Yerel Ortamda Çalıştırma
 
 ```bash
+# Bağımlılıkları yükleyin
 flutter pub get
+
+# Windows Desktop uygulamasını geliştirme modunda açın
 flutter run -d windows
+
+# Birim testleri çalıştırın
 flutter test
-flutter build windows --release
+
+# Statik analizi çalıştırın
+flutter analyze
 ```
 
-Yapı:
-
+### Tek Tıkla Setup Derleme
+Bilgisayarınızda [Inno Setup 6](https://jrsoftware.org/isinfo.php) kurulu ise:
+```powershell
+.\build_installer.ps1
+# veya
+.\build_installer.bat
 ```
-assets/packages/   yazılım paketi tanımları (JSON)
-assets/courses/    ders tanımları (JSON)
-assets/compose/    docker compose şablonları
-assets/help/       hata -> açıklama + kaynak eşlemeleri
-docker/php-web/    özel PHP imajı (GHCR'a yayınlanır)
-installer/         Inno Setup betiği (MFLab-Setup.exe)
-lib/               Flutter uygulaması
-version.json       güncelleme denetimi için sürüm bilgisi
-```
+Derlenen `MFLab-Setup.exe` doğrudan Masaüstünüze (`Desktop`) kopyalanacaktır.
 
-### Yeni ders ekleme
+---
 
-Kod yazmadan, JSON ile:
+## 🤝 Katkıda Bulunma (Pull Request)
 
-1. Gerekirse `assets/packages/<paket>.json` ekle (`type: "tool"` ya da `"docker"`, `why` alanını doldur).
-2. Docker paketiyse `assets/compose/<ad>.yml` ekle (çalışma klasörü `${WORKSPACE}` değişkeniyle bağlanır).
-3. `assets/courses/courses.json` içine dersi ekle (paketler, VS Code eklentileri, çalışma klasörü adı).
+MF Lab açık kaynaklı bir topluluk projesidir. Üniversiteler, meslek yüksekokulları veya liseler için yeni ders ortamları, yeni Docker servisleri veya hata çözümleri eklemekten mutluluk duyarız!
 
-Ayrıntılar için [CONTRIBUTING.md](CONTRIBUTING.md).
+1. Bu depoyu **Fork**'layın.
+2. Yeni bir dal açın (`git checkout -b feature/yeni-ders`).
+3. Değişikliklerinizi yapıp testleri çalıştırın (`flutter test`).
+4. Bir **Pull Request** gönderin!
 
-### Kendi sürümün (fork)
+Ayrıntılı rehber için lütfen [CONTRIBUTING.md](CONTRIBUTING.md) belgesini inceleyin.
 
-[`lib/config.dart`](lib/config.dart) içindeki GitHub kullanıcı/depo adını ve `docker/php-web` imaj adını (compose dosyalarında) kendi hesabınla değiştir.
+---
 
-## Sürüm yayınlama
+## 📜 Lisans
 
-1. `lib/config.dart` ve `pubspec.yaml` içindeki sürümü ve `version.json`'u güncelle.
-2. `git tag v1.0.1 && git push --tags`
-3. GitHub Actions uygulamayı derler, `MFLab-Setup.exe`'yi Release'e yükler. `docker/php-web` değiştiyse imaj da GHCR'a gönderilir.
+Bu proje **[MIT Lisansı](LICENSE)** ile lisanslanmıştır. Eğitim ve ticari amaçlarla serbestçe kullanılabilir, kopyalanabilir ve dağıtılabilir.
 
-Öğrenciler uygulamayı açtıklarında `version.json` kontrol edilir ve yeni sürüm varsa bildirim görürler.
-
-## Lisans
-
-[MIT](LICENSE) © 2026 Mustafa Fenerci
+**Mustafa Fenerci** © 2026

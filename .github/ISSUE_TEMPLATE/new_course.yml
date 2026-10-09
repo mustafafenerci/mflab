@@ -1,0 +1,32 @@
+name: 🎓 Yeni Ders Ortamı Önerisi (New Course Environment)
+description: Müfredata eklenecek yeni bir ders veya teknoloji ortamı önerin
+title: "[DERS]: "
+labels: ["course-proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        MF Lab'e yeni bir ders eklemek çok kolaydır (genellikle sadece JSON ve Compose dosyası gerektirir).
+  - type: input
+    id: course_name
+    attributes:
+      label: Dersin / Alanın Adı
+      placeholder: "Örn: Nesne Yönelimli Programlama / Mobil Uygulama Geliştirme / Python ile Veri Analizi"
+    validations:
+      required: true
+  - type: textarea
+    id: tools
+    attributes:
+      label: Gerekli Yazılımlar ve Servisler
+      description: Ders kapsamında hangi servisler (Docker) ve araçlar (VS Code eklentileri vb.) gerekecek?
+      placeholder: "Python 3.12, Jupyter, PostgreSQL, VS Code Python Extension..."
+    validations:
+      required: true
+  - type: textarea
+    id: ports
+    attributes:
+      label: İhtiyaç Duyulan Portlar
+      description: Servislerin dinleyeceği portlar (Öneri: 63xx serisi çakışmasız portlar)
+      placeholder: "Örn: Web arayüzü 6390, veritabanı 6391..."
+    validations:
+      required: false

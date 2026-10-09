@@ -1,0 +1,32 @@
+name: 💡 Özellik / İyileştirme Önerisi (Feature Request)
+description: MF Lab için yeni bir özellik veya geliştirme önerin
+title: "[ÖNERİ]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        MF Lab'in gelişimine katkıda bulunmak istediğiniz için teşekkür ederiz!
+  - type: textarea
+    id: problem
+    attributes:
+      label: İlgili İhtiyaç veya Problem
+      description: Bu özellik hangi ihtiyacı karşılıyor veya hangi problemi çözüyor?
+      placeholder: "Öğrenciler genellikle şu aşamada zorluk yaşıyor..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Önerilen Çözüm / Özellik
+      description: Nasıl çalışmasını önerirsiniz?
+      placeholder: "Arayüze şöyle bir buton veya seçenek eklenebilir..."
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Ek Bilgi veya Görseller
+      description: Konuyla ilgili ek kaynaklar, bağlantılar veya ekran görüntüleri
+    validations:
+      required: false
