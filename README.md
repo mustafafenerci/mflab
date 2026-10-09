@@ -65,6 +65,22 @@ irm https://raw.githubusercontent.com/mustafafenerci/mflab/main/scripts/install.
 
 > **Not (Docker Desktop):** Web Programlama ve Veritabanı dersleri için bilgisayarınızda [Docker Desktop](https://www.docker.com/products/docker-desktop/) kurulu ve çalışır durumda olmalıdır. Docker kurulu değilse MF Lab sizi otomatik olarak bilgilendirir.
 
+### ⚠️ "Windows kişisel bilgisayarınızı korudu" Uyarısı
+
+`MFLab-Setup.exe` internetten indirilip çift tıklandığında Windows şu uyarıyı gösterebilir:
+
+> **Windows kişisel bilgisayarınızı korudu** — Microsoft Defender SmartScreen tanınmayan bir uygulamanın başlamasını engelledi. Yayımcı: Bilinmeyen yayımcı
+
+Bu bir **hata veya virüs uyarısı değildir.** MF Lab açık kaynaklıdır (kaynak kodu bu depoda) ve kurulum dosyası GitHub Actions ile herkesin görebileceği şekilde derlenir. Uyarı, dosyanın ücretli bir kod imzalama sertifikasıyla imzalanmamış olmasından kaynaklanır; indirilen her imzasız `.exe` bu uyarıyı alır.
+
+**Kurulumu şöyle sürdürebilirsiniz (aşağıdakilerden biri yeterli):**
+
+1. Uyarı penceresinde **"Ek bilgi"** yazısına tıklayın, ardından çıkan **"Yine de çalıştır"** düğmesine basın.
+2. Ya da indirdiğiniz `MFLab-Setup.exe` dosyasına **sağ tıklayın → Özellikler** → en altta **"Engellemeyi kaldır"** kutusunu işaretleyip **Tamam**'a basın, sonra dosyayı normal şekilde çalıştırın.
+3. Ya da uyarıyla hiç karşılaşmamak için yukarıdaki **Yöntem 2 (PowerShell tek komut)** ile kurun. Bu yöntemle indirilen dosyada "internetten indirildi" işareti oluşmaz.
+
+> **Güvenlik ipucu:** Kurulum dosyasını yalnızca bu deponun [Releases sayfasından](https://github.com/mustafafenerci/mflab/releases/latest) indirin. Başka bir yerden gelen `MFLab-Setup.exe` dosyalarına güvenmeyin.
+
 ---
 
 ## 👨‍💻 Geliştiriciler ve Eğitmenler İçin
