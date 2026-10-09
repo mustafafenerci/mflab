@@ -28,11 +28,82 @@ class Engine {
   /// Türkçe karakterler bozuluyordu ("Ã¶", "ÅŸ" gibi).
   static const _utf8 = Utf8Codec(allowMalformed: true);
 
+  /// Alt süreçlere verilen ortam. Uygulama açıldıktan sonra kurulan programlar (VS Code, Git,
+  /// Docker) çalışan sürecin PATH'inde olmaz; [refreshPath] güncel PATH'i buraya koyar.
+  static Map<String, String>? _env;
+
+  /// Windows'taki güncel (Makine + Kullanıcı) PATH'i okur ve bilinen kurulum klasörlerini ekler.
+  /// Böylece VS Code / Git / Docker'ı sonradan kuran öğrenci uygulamayı kapatıp açmak zorunda kalmaz.
+  static Future<void> refreshPath() async {
+    final parts = <String>[];
+    final seen = <String>{};
+    void add(String? raw) {
+      final v = (raw ?? '').trim();
+      if (v.isEmpty) return;
+      if (seen.add(v.toLowerCase())) parts.add(v);
+    }
+
+    for (final x in (Platform.environment['PATH'] ?? '').split(';')) {
+      add(x);
+    }
+    try {
+      final r = await Process.run(
+          'powershell',
+          [
+            '-NoProfile',
+            '-Command',
+            "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + "
+                "[Environment]::GetEnvironmentVariable('Path','User')"
+          ],
+          stdoutEncoding: _utf8);
+      for (final x in (r.stdout as String).split(';')) {
+        add(x);
+      }
+    } catch (_) {}
+    // PATH'e eklenmemiş olsa bile bilinen kurulum yerlerine bak.
+    for (final d in _knownToolDirs()) {
+      if (Directory(d).existsSync()) add(d);
+    }
+    _env = {'PATH': parts.join(';')};
+  }
+
+  static List<String> _knownToolDirs() {
+    final local = Platform.environment['LOCALAPPDATA'] ?? '';
+    final pf = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
+    final pf86 =
+        Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)';
+    return [
+      '$local\\Programs\\Microsoft VS Code\\bin',
+      '$pf\\Microsoft VS Code\\bin',
+      '$pf86\\Microsoft VS Code\\bin',
+      '$pf\\Git\\cmd',
+      '$pf86\\Git\\cmd',
+      '$pf\\Docker\\Docker\\resources\\bin',
+    ];
+  }
+
+  /// VS Code'un çalıştırılabilir dosyası (kurulu değilse null).
+  static String? findVsCodeExe() {
+    final local = Platform.environment['LOCALAPPDATA'] ?? '';
+    final pf = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
+    final pf86 =
+        Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)';
+    for (final c in [
+      '$local\\Programs\\Microsoft VS Code\\Code.exe',
+      '$pf\\Microsoft VS Code\\Code.exe',
+      '$pf86\\Microsoft VS Code\\Code.exe',
+    ]) {
+      if (File(c).existsSync()) return c;
+    }
+    return null;
+  }
+
   static Future<ProcessResult> run(String cmd, List<String> args,
       {String? cwd}) {
     return Process.run(cmd, args,
         workingDirectory: cwd,
         runInShell: true,
+        environment: _env,
         stdoutEncoding: _utf8,
         stderrEncoding: _utf8);
   }
@@ -42,7 +113,7 @@ class Engine {
       {String? cwd, required Log log}) async {
     final buf = StringBuffer();
     final proc = await Process.start(cmd, args,
-        workingDirectory: cwd, runInShell: true);
+        workingDirectory: cwd, runInShell: true, environment: _env);
     final done = <Future<void>>[];
     for (final s in [proc.stdout, proc.stderr]) {
       final c = Completer<void>();
@@ -82,6 +153,7 @@ class Engine {
 
   static Future<void> openInVsCode(String path) async {
     await Directory(path).create(recursive: true);
+    await refreshPath();
     await run('code', [path]);
   }
 
@@ -100,18 +172,21 @@ class Engine {
 
   static Future<bool> ensureTool(LabPackage p, Log log) async {
     log('${p.name} kontrol ediliyor...');
+    await refreshPath();
     if (await commandOk(p.check!)) {
       log('✔ ${p.name} kurulu.');
       return true;
     }
     log('✖ ${p.name} bulunamadı. İndirme sayfası açılıyor: ${p.downloadUrl}');
-    log('Kurulumu bitirdikten sonra bu uygulamada "Kur" düğmesine tekrar bas.');
+    log('Kurulumu bitirdikten sonra bu uygulamada "Kur" düğmesine tekrar bas. '
+        'Uygulamayı kapatıp açmana gerek yok, yeni kurulan program otomatik bulunur.');
     await openUrl(p.downloadUrl!);
     return false;
   }
 
   static Future<void> installExtensions(List<String> ids, Log log) async {
     if (ids.isEmpty) return;
+    await refreshPath();
     if (!await commandOk('code --version')) {
       log('VS Code komutu bulunamadı, eklentiler atlandı.');
       return;
@@ -127,6 +202,7 @@ class Engine {
 
   static Future<InstallResult> installDocker(
       Catalog cat, Course course, LabPackage p, Log log) async {
+    await refreshPath();
     if (!await dockerInstalled()) {
       log('✖ Docker bulunamadı. Önce Docker Desktop kurulmalı.');
       return InstallResult(false);
@@ -770,6 +846,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
   static Future<void> diagnoseSystem(Log log) async {
     log('\n=== 🔍 MF Lab Sistem & Donanım Tanısı ===');
 
+    await refreshPath();
     // 1. Docker
     final dInst = await dockerInstalled();
     final dRun = await dockerRunning();
@@ -948,8 +1025,14 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
       sb.writeln("Lnk 'MF Lab Yönetim Paneli' '${_ps(exe)}' \$null \$null");
     }
     if (hasCode) {
-      sb.writeln(
-          "Lnk 'VS Code ile aç' 'cmd.exe' '/c code \"${_ps(ws)}\"' 7");
+      final codeExe = findVsCodeExe();
+      if (codeExe != null) {
+        sb.writeln(
+            "Lnk 'VS Code ile aç' '${_ps(codeExe)}' '\"${_ps(ws)}\"' 1");
+      } else {
+        sb.writeln(
+            "Lnk 'VS Code ile aç' 'cmd.exe' '/c code \"${_ps(ws)}\"' 7");
+      }
     }
     for (final p in pkgs) {
       for (final l in p.links) {
@@ -1159,7 +1242,7 @@ GitHub         : ${AppConfig.repoUrl}
       '-NoExit',
       '-Command',
       script,
-    ], runInShell: true);
+    ], runInShell: true, environment: _env);
   }
 
   /// Windows dosya seçici penceresi açar (OpenFileDialog).

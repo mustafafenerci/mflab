@@ -58,6 +58,7 @@ class AppState extends ChangeNotifier {
   Future<void> init() async {
     settings = await AppSettings.load();
     await Engine.loadPortMaps();
+    await Engine.refreshPath();
     catalog = await Catalog.load();
     notifyListeners();
     await checkUpdate();

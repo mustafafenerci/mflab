@@ -137,4 +137,13 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     expect(find.text(msg), findsOneWidget);
   });
+
+  test('refreshPath: sonradan kurulan VS Code uygulama yeniden açılmadan bulunur',
+      () async {
+    await Engine.refreshPath();
+    final exe = Engine.findVsCodeExe();
+    if (exe == null) return; // Bu bilgisayarda VS Code yok; denenecek bir şey yok.
+    final r = await Engine.run('code', ['--version']);
+    expect(r.exitCode, 0);
+  });
 }
