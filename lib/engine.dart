@@ -81,7 +81,6 @@ class Engine {
     await run('code', [path]);
   }
 
-  static String _q(String s) => '"$s"';
 
   // -------------------------------------------------------------- help/errs
 
