@@ -37,7 +37,7 @@ class _MFLabAppState extends State<MFLabApp> {
     return ListenableBuilder(
       listenable: state,
       builder: (context, _) => MaterialApp(
-        title: AppConfig.appName,
+        title: '${AppConfig.appName} v${AppConfig.appVersion}',
         debugShowCheckedModeBanner: false,
         themeMode: state.themeMode,
         theme: ThemeData(
@@ -107,8 +107,34 @@ class _ShellState extends State<Shell> {
                   labelType: NavigationRailLabelType.all,
                   onDestinationSelected: (i) => setState(() => index = i),
                   leading: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Image.asset('assets/images/logo.png', width: 52),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset('assets/images/logo.png', width: 48),
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primaryContainer,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'v${AppConfig.appVersion}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   trailing: Expanded(
                     child: Align(
