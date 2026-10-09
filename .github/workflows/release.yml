@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Sürüm etiketi (örn: v1.0.1 - boş bırakılırsa pubspec.yaml sürümü kullanılır)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -21,10 +27,28 @@ jobs:
       - run: flutter build windows --release
       - name: Install Inno Setup
         run: choco install innosetup -y --no-progress
+      - name: Determine version
+        id: ver
+        shell: pwsh
+        run: |
+          $ref = "${{ github.ref_name }}"
+          $v = ""
+          if ($ref -and $ref.StartsWith("v")) {
+            $v = $ref.TrimStart('v')
+          } elseif ("${{ inputs.tag }}") {
+            $v = "${{ inputs.tag }}".TrimStart('v')
+          } else {
+            $pub = Get-Content pubspec.yaml | Select-String "^version:\s*([0-9\.]+)"
+            $v = if ($pub) { $pub.Matches.Groups[1].Value } else { "1.0.0" }
+          }
+          $tag = "v" + $v
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "tag_name=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Derlenecek Sürüm: $v | Etiket: $tag"
       - name: Build installer
         shell: pwsh
         run: |
-          $v = "${{ github.ref_name }}".TrimStart('v')
+          $v = "${{ steps.ver.outputs.version }}"
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$v" installer\mflab.iss
       - name: Checksum
         shell: pwsh
@@ -33,6 +57,7 @@ jobs:
           "$h  MFLab-Setup.exe" | Out-File dist\MFLab-Setup.exe.sha256 -Encoding ascii
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ver.outputs.tag_name }}
           files: |
             dist/MFLab-Setup.exe
             dist/MFLab-Setup.exe.sha256

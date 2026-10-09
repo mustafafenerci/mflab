@@ -45,14 +45,19 @@
 
 ## 📥 Öğrenciler İçin Kurulum (Hızlı Başlangıç)
 
+### Yöntem 1: Kurulum Dosyası İle (Önerilen)
 1. **Setup Dosyasını İndirin:**  
-   [👉 En Güncel MF Lab Setup Dosyasını İndir (v1.0.0)](https://github.com/mustafafenerci/mflab/releases/latest/download/MFLab-Setup.exe)
+   [👉 **En Güncel MFLab-Setup.exe İndir (v1.0.0)**](https://github.com/mustafafenerci/mflab/releases/latest/download/MFLab-Setup.exe)
 2. **Kurulumu Başlatın:**  
    `MFLab-Setup.exe` dosyasını çalıştırın ve kurulum sihirbazını tamamlayın.
 3. **Dersinizi Seçin ve Kur'a Basın:**  
    Masaüstündeki **MF Lab** kısayolundan uygulamayı açın, aldığınız dersi seçip **"Kur"** butonuna basın.
-4. **Çalışmaya Başlayın:**  
-   Kurulum bittiğinde masaüstünüze gelen kısayollarla kodunuzu yazabilir ve web sitenizi görüntüleyebilirsiniz!
+
+### Yöntem 2: Tek Komutla PowerShell Kurulumu (Laboratuvarlar & Hızlı Kurulum)
+Windows PowerShell'i açıp şu komutu yapıştırmanız yeterlidir:
+```powershell
+irm https://raw.githubusercontent.com/mustafafenerci/mflab/main/scripts/install.ps1 | iex
+```
 
 > **Not (Docker Desktop):** Web Programlama ve Veritabanı dersleri için bilgisayarınızda [Docker Desktop](https://www.docker.com/products/docker-desktop/) kurulu ve çalışır durumda olmalıdır. Docker kurulu değilse MF Lab sizi otomatik olarak bilgilendirir.
 
