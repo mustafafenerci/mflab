@@ -442,6 +442,211 @@ class Engine {
         : '✖ Kısayollar oluşturulamadı: ${r.stderr}');
   }
 
+  // ----------------------------------------------------------------- advanced features
+
+  /// Belirtilen portların dolu olup olmadığını yerel olarak test eder.
+  static Future<List<int>> findConflictingPorts(List<int> ports) async {
+    final conflicts = <int>[];
+    for (final port in ports) {
+      try {
+        final socket = await ServerSocket.bind(InternetAddress.anyIPv4, port);
+        await socket.close();
+      } catch (_) {
+        conflicts.add(port);
+      }
+    }
+    return conflicts;
+  }
+
+  /// Konteyner içinde etkileşimli terminal (bash / sh) penceresi açar.
+  static Future<void> openContainerTerminal(
+      Course course, LabPackage pkg, {String service = 'web'}) async {
+    final stack = stackDir(course, pkg);
+    final compose = '$stack\\compose.yml';
+    final script = 'Write-Host "==============================================" -ForegroundColor Cyan; '
+        'Write-Host "  MF Lab: ${pkg.name} - ($service)" -ForegroundColor Yellow; '
+        'Write-Host "  Konteyner ici calisma dizini: /var/www/html veya /" -ForegroundColor Gray; '
+        'Write-Host "  Cikmak icin: exit yazin" -ForegroundColor Gray; '
+        'Write-Host "==============================================" -ForegroundColor Cyan; '
+        'docker compose -f "$compose" exec -it $service bash; '
+        'if (\$LASTEXITCODE -ne 0) { docker compose -f "$compose" exec -it $service sh }';
+
+    await Process.start('cmd.exe', [
+      '/c',
+      'start',
+      'powershell',
+      '-NoExit',
+      '-Command',
+      script,
+    ], runInShell: true);
+  }
+
+  /// Windows dosya seçici penceresi açar (OpenFileDialog).
+  static Future<String?> pickFile({
+    required String title,
+    required String filterName,
+    required String extension,
+  }) async {
+    final cmd = 'Add-Type -AssemblyName System.Windows.Forms; '
+        '\$f = New-Object System.Windows.Forms.OpenFileDialog; '
+        '\$f.Title = "${_ps(title)}"; '
+        '\$f.Filter = "${_ps(filterName)} (*.$extension)|*.$extension|Tum Dosyalar (*.*)|*.*"; '
+        'if (\$f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output \$f.FileName }';
+
+    final r = await run('powershell', ['-NoProfile', '-Command', cmd]);
+    if (r.exitCode == 0 && (r.stdout as String).trim().isNotEmpty) {
+      return (r.stdout as String).trim();
+    }
+    return null;
+  }
+
+  /// Veritabanı yedeğini masaüstüne .sql dosyası olarak aktarır.
+  static Future<String?> backupDatabase(Course c, LabPackage p, Log log) async {
+    final stack = stackDir(c, p);
+    final now = DateTime.now();
+    final timeStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    final fileName = 'mflab_${c.id}_yedek_$timeStr.sql';
+
+    final rDesk = await run('powershell', ['-NoProfile', '-Command', r"[Environment]::GetFolderPath('Desktop')"]);
+    final desktop = (rDesk.stdout as String).trim();
+    final outPath = '$desktop\\$fileName';
+
+    log('\n=== Veritabanı Yedeği Alınıyor ===');
+    log('Hedef dosya: $outPath');
+
+    String dumpCmd;
+    if (p.id == 'web2-stack') {
+      dumpCmd = 'docker compose -f "$stack\\compose.yml" exec -T db mariadb-dump -uroot -proot --all-databases > "${outPath.replaceAll('\\', '/')}"';
+    } else {
+      dumpCmd = 'docker compose -f "$stack\\compose.yml" exec -T postgres pg_dumpall -U postgres > "${outPath.replaceAll('\\', '/')}"';
+    }
+
+    final r = await run('cmd', ['/c', dumpCmd]);
+    if (r.exitCode == 0 && await File(outPath).exists()) {
+      log('✔ Veritabanı yedeği masaüstüne kaydedildi: $fileName');
+      return outPath;
+    } else {
+      log('✖ Yedek alınamadı: ${r.stderr}');
+      return null;
+    }
+  }
+
+  /// Bilgisayardan seçilen bir .sql dosyasını veritabanına aktarır.
+  static Future<bool> importDatabase(
+      Course c, LabPackage p, String sqlFilePath, Log log) async {
+    log('\n=== Veritabanı İçe Aktarılıyor ===');
+    log('Kaynak dosya: $sqlFilePath');
+    final stack = stackDir(c, p);
+
+    String importCmd;
+    if (p.id == 'web2-stack') {
+      importCmd = 'type "${sqlFilePath.replaceAll('/', '\\')}" | docker compose -f "$stack\\compose.yml" exec -T db mariadb -uroot -proot mflab';
+    } else {
+      importCmd = 'type "${sqlFilePath.replaceAll('/', '\\')}" | docker compose -f "$stack\\compose.yml" exec -T postgres psql -U postgres postgres';
+    }
+
+    final r = await run('cmd', ['/c', importCmd]);
+    if (r.exitCode == 0) {
+      log('✔ .sql dosyası veritabanına başarıyla aktarıldı.');
+      return true;
+    } else {
+      log('✖ İçe aktarma sırasında hata oluştu: ${r.stderr}');
+      return false;
+    }
+  }
+
+  /// Öğrencinin kodlarını + veritabanı yedeğini tek tıkla teslim Zip'ine dönüştürür.
+  static Future<String?> exportHomeworkZip({
+    required Course course,
+    required Catalog catalog,
+    required String studentName,
+    required String studentNumber,
+    required Log log,
+  }) async {
+    log('\n=== 📦 Ödev Teslim Paketi Oluşturuluyor ===');
+    final cleanName = studentName.trim().replaceAll(RegExp(r'\s+'), '_').replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
+    final cleanNo = studentNumber.trim().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    final zipName = '${cleanNo}_${cleanName}_${course.id}.zip';
+
+    final rDesk = await run('powershell', ['-NoProfile', '-Command', r"[Environment]::GetFolderPath('Desktop')"]);
+    final desktop = (rDesk.stdout as String).trim();
+    final outZip = '$desktop\\$zipName';
+
+    final tempDir = Directory('${Directory.systemTemp.path}\\mflab_hw_${DateTime.now().millisecondsSinceEpoch}');
+    await tempDir.create(recursive: true);
+
+    try {
+      // 1. Öğrenci bilgi dosyası
+      final infoFile = File('${tempDir.path}\\OGRENCI_BILGI.txt');
+      await infoFile.writeAsString(
+        'MF Lab - Odev Teslim Raporu\n'
+        '====================================\n'
+        'Ogrenci No: $studentNumber\n'
+        'Ad Soyad: $studentName\n'
+        'Ders: ${course.name}\n'
+        'Tarih: ${DateTime.now()}\n'
+        '====================================\n',
+      );
+
+      // 2. Kod klasörünü kopyala
+      final ws = Directory(workspaceDir(course));
+      if (await ws.exists()) {
+        log('Proje kodları kopyalanıyor...');
+        final copyScript = 'Copy-Item -Path "${_ps(ws.path)}\\*" -Destination "${_ps(tempDir.path)}\\kodlar" -Recurse -Force';
+        await Directory('${tempDir.path}\\kodlar').create(recursive: true);
+        await run('powershell', ['-NoProfile', '-Command', copyScript]);
+      }
+
+      // 3. Veritabanı varsa yedeğini al
+      for (final id in course.packages) {
+        final p = catalog.packages[id];
+        if (p != null && p.isDocker) {
+          final isUp = await isRunning(course, p);
+          if (isUp) {
+            log('Veritabanı yedeği pakete ekleniyor...');
+            final sqlFile = '${tempDir.path}\\veritabani.sql';
+            final stack = stackDir(course, p);
+            String dumpCmd = p.id == 'web2-stack'
+                ? 'docker compose -f "$stack\\compose.yml" exec -T db mariadb-dump -uroot -proot --all-databases > "${sqlFile.replaceAll('\\', '/')}"'
+                : 'docker compose -f "$stack\\compose.yml" exec -T postgres pg_dumpall -U postgres > "${sqlFile.replaceAll('\\', '/')}"';
+            await run('cmd', ['/c', dumpCmd]);
+          }
+        }
+      }
+
+      // 4. Zip oluştur
+      log('Zip arşivi oluşturuluyor...');
+      final zipScript = 'if (Test-Path "${_ps(outZip)}") { Remove-Item -Force "${_ps(outZip)}" }; '
+          'Compress-Archive -Path "${_ps(tempDir.path)}\\*" -DestinationPath "${_ps(outZip)}" -Force';
+      final r = await run('powershell', ['-NoProfile', '-Command', zipScript]);
+      if (r.exitCode == 0 && await File(outZip).exists()) {
+        log('🎉 Ödev paketi masaüstünde hazır: $zipName');
+        return outZip;
+      } else {
+        log('✖ Zip oluşturulamadı: ${r.stderr}');
+        return null;
+      }
+    } finally {
+      try {
+        await tempDir.delete(recursive: true);
+      } catch (_) {}
+    }
+  }
+
+  /// USB'den veya yerel dosyadan (.tar) imajları Docker'a yükler (çevrimdışı sınıf desteği).
+  static Future<bool> importDockerTar(String tarPath, Log log) async {
+    log('\n=== 📥 Çevrimdışı İmaj Yükleniyor (.tar) ===');
+    log('Dosya: $tarPath');
+    final (code, _) = await stream('docker', ['load', '-i', tarPath], log: log);
+    if (code == 0) {
+      log('✔ İmajlar başarıyla Docker\'a aktarıldı.');
+      return true;
+    } else {
+      log('✖ İmaj yüklenemedi.');
+      return false;
+    }
+  }
+
   // ----------------------------------------------------------------- update
 
   static List<int> _ver(String v) => v

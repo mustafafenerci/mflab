@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 
 import 'engine.dart';
 import 'models.dart';
@@ -9,6 +9,19 @@ class AppState extends ChangeNotifier {
   UpdateInfo? update;
   bool updateDismissed = false;
   bool checkedUpdate = false;
+
+  ThemeMode themeMode = ThemeMode.system;
+
+  void cycleTheme() {
+    if (themeMode == ThemeMode.system) {
+      themeMode = ThemeMode.light;
+    } else if (themeMode == ThemeMode.light) {
+      themeMode = ThemeMode.dark;
+    } else {
+      themeMode = ThemeMode.system;
+    }
+    notifyListeners();
+  }
 
   final logs = <String>[];
   bool busy = false;
@@ -75,6 +88,20 @@ class AppState extends ChangeNotifier {
         .whereType<LabPackage>()
         .toList()
       ..sort((a, b) => (a.isDocker ? 1 : 0).compareTo(b.isDocker ? 1 : 0));
+
+    // Port çakışması ön kontrolü
+    final allPorts = pkgs.expand((p) => p.ports).toSet().toList();
+    if (allPorts.isNotEmpty) {
+      log('Portlar kontrol ediliyor (${allPorts.join(', ')})...');
+      final conflicts = await Engine.findConflictingPorts(allPorts);
+      if (conflicts.isNotEmpty) {
+        log('⚠️ DİKKAT: Şu port(lar) şu an başka bir program tarafından KULLANILIYOR: ${conflicts.join(', ')}');
+        log('Eğer bilgisayarında XAMPP, Skype veya başka bir sunucu açıksa kapatman gerekebilir.');
+        lastHelp = Engine.helpFor(cat, 'port is already allocated');
+      } else {
+        log('✔ Portlar boş ve kullanıma hazır.');
+      }
+    }
 
     var dockerOk = true;
     var vscodeOk = false;

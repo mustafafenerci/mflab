@@ -197,6 +197,32 @@ class _ServiceCard extends StatelessWidget {
                   label: const Text('Loglar'),
                 ),
                 if (e.running)
+                  OutlinedButton.icon(
+                    onPressed: () => Engine.openContainerTerminal(e.course, e.pkg),
+                    icon: const Icon(Icons.terminal, size: 18),
+                    label: const Text('Terminal'),
+                  ),
+                if (e.running && (e.pkg.id == 'web2-stack' || e.pkg.id == 'vtys-stack')) ...[
+                  OutlinedButton.icon(
+                    onPressed: busy
+                        ? null
+                        : () => page._task(() =>
+                            Engine.backupDatabase(e.course, e.pkg, s.log)),
+                    icon: const Icon(Icons.backup_outlined, size: 18),
+                    label: const Text('Yedek Al (.sql)'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : () => _importSql(context),
+                    icon: const Icon(Icons.restore_page_outlined, size: 18),
+                    label: const Text('İçe Aktar (.sql)'),
+                  ),
+                ],
+                OutlinedButton.icon(
+                  onPressed: busy ? null : () => _exportHomeworkDialog(context),
+                  icon: const Icon(Icons.archive_outlined, size: 18),
+                  label: const Text('Ödevi Paketle (.zip)'),
+                ),
+                if (e.running)
                   for (final a in e.pkg.actions)
                     OutlinedButton.icon(
                       onPressed: busy ? null : () => _runAction(context, a),
@@ -364,6 +390,92 @@ class _ServiceCard extends StatelessWidget {
             removeVolumes: removeVolumes,
             removeWorkspace: removeWorkspace,
             removeShortcuts: removeShortcuts,
+            log: page.s.log,
+          ));
+    }
+  }
+
+  Future<void> _importSql(BuildContext context) async {
+    final path = await Engine.pickFile(
+      title: 'İçe Aktarılacak .sql Dosyasını Seç',
+      filterName: 'SQL Dosyaları',
+      extension: 'sql',
+    );
+    if (path == null) return;
+
+    if (!context.mounted) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Veritabanını İçe Aktar?'),
+        content: Text('$path dosyasındaki tablolar ve veriler veritabanına aktarılacak. Onaylıyor musun?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('İçe Aktar')),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await page._task(() => Engine.importDatabase(entry.course, entry.pkg, path, page.s.log));
+    }
+  }
+
+  Future<void> _exportHomeworkDialog(BuildContext context) async {
+    final nameCtrl = TextEditingController();
+    final noCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ödev Teslim Paketi Oluştur (.zip)'),
+        content: SizedBox(
+          width: 400,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Kodların ve veritabanı yedeğin tek bir .zip arşivi olarak masaüstüne kaydedilecek.'),
+              const SizedBox(height: 12),
+              TextField(
+                controller: noCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Öğrenci Numarası',
+                  hintText: 'Örn: 2024101050',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Ad Soyad',
+                  hintText: 'Örn: Ali Yılmaz',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton.icon(
+            onPressed: () {
+              if (noCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) {
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            icon: const Icon(Icons.archive),
+            label: const Text('Paketle'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await page._task(() => Engine.exportHomeworkZip(
+            course: entry.course,
+            catalog: page.s.catalog!,
+            studentName: nameCtrl.text.trim(),
+            studentNumber: noCtrl.text.trim(),
             log: page.s.log,
           ));
     }

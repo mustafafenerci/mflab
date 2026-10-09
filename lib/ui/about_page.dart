@@ -76,6 +76,29 @@ class AboutPage extends StatelessWidget {
             label: const Text('Sistem Durumunu Tara'),
           ),
         ]),
+        _section(context, 'Çevrimdışı Laboratuvar Desteği', [
+          const Text(
+              'Okul veya sınıf interneti yavaşsa veya kota sorunu varsa, hocandan USB ile aldığın hazır imaj arşivini (.tar) tek tıkla Docker\'a aktarabilirsin.'),
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            onPressed: state.busy
+                ? null
+                : () async {
+                    final path = await Engine.pickFile(
+                      title: 'Docker İmaj Arşivi (.tar) Seç',
+                      filterName: 'Tar Arşivleri',
+                      extension: 'tar',
+                    );
+                    if (path != null) {
+                      state.clearLog();
+                      state.runTask(
+                          () => Engine.importDockerTar(path, state.log));
+                    }
+                  },
+            icon: const Icon(Icons.usb),
+            label: const Text('USB / Dosyadan İmaj Yükle (.tar)'),
+          ),
+        ]),
         _section(context, 'Güncelleme', [
           ListenableBuilder(
             listenable: state,
