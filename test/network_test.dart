@@ -47,7 +47,8 @@ void main() {
     expect(await f.length(), greaterThan(1000000));
     // Sunucu boyut bildirmezse ilerleme çağrılmaz; bildirirse %100'e ulaşmalı.
     if (last != null) expect(last, closeTo(1.0, 0.001));
-    expect(await Updater.verify('1.1.6', f), isTrue);
+    final (expected, actual) = await Updater.hashes('1.1.6', f);
+    expect('boyut=${await f.length()} hesaplanan=$actual', 'boyut=${await f.length()} hesaplanan=$expected');
     await f.delete();
   }, timeout: const Timeout(Duration(minutes: 3)));
 }

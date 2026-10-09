@@ -70,10 +70,16 @@ class Updater {
     return h.length == 64 ? h : null;
   }
 
-  /// İndirilen dosyanın GitHub'daki .sha256 ile aynı olduğunu doğrular.
-  static Future<bool> verify(String version, File f) async {
+  /// GitHub'daki beklenen özet ile indirilen dosyanın gerçek özeti.
+  static Future<(String?, String?)> hashes(String version, File f) async {
     final expected = parseChecksum(await _getText(checksumUrl(version)));
     final actual = await sha256Of(f);
+    return (expected, actual);
+  }
+
+  /// İndirilen dosyanın GitHub'daki .sha256 ile aynı olduğunu doğrular.
+  static Future<bool> verify(String version, File f) async {
+    final (expected, actual) = await hashes(version, f);
     return expected != null && actual != null && expected == actual;
   }
 
