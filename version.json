@@ -1,6 +1,6 @@
 {
-  "version": "1.1.5",
+  "version": "1.1.6",
   "url": "https://github.com/mustafafenerci/mflab/releases/latest",
-  "notes": "VS Code, Git ve Docker sonradan kurulsa bile uygulama yeniden acilmadan bulunur (PATH otomatik yenilenir).",
+  "notes": "Kurulum oncesi On Kontrol (Windows, RAM, disk, sanallastirma, WSL, yeniden baslatma, Docker modu, internet), yeni hata aciklamalari, tek ornek ve guvenli guncelleme.",
   "mandatory": false
 }

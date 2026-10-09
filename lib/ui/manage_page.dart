@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../app_state.dart';
 import '../engine.dart';
 import '../models.dart';
+import '../preflight.dart';
 import 'widgets.dart';
 
 class _Entry {
@@ -161,6 +162,16 @@ class _ManagePageState extends State<ManagePage> {
                               ?.copyWith(color: cs.onSurfaceVariant)),
                     ],
                   ),
+                ),
+                _tool(
+                  icon: Icons.fact_check_outlined,
+                  label: 'Ön Kontrol',
+                  hint:
+                      'Bilgisayarın Docker için hazır mı bakar: Windows sürümü, RAM, disk, sanallaştırma, WSL, '
+                      'yeniden başlatma, Docker modu ve internet erişimi. Sorun varsa ne yapacağını Türkçe yazar.',
+                  onPressed: s.busy
+                      ? null
+                      : () => _task(() => Preflight.run(s.log, needsDocker: true)),
                 ),
                 _tool(
                   icon: Icons.health_and_safety_outlined,

@@ -13,6 +13,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     CreateAndAttachConsole();
   }
 
+  // Tek örnek: MF Lab zaten açıksa (tepside gizli olabilir) yenisini açma,
+  // mevcut pencereyi öne getir.
+  HANDLE single_instance =
+      ::CreateMutexW(nullptr, TRUE, L"Local\\MFLabSingleInstance");
+  if (single_instance && ::GetLastError() == ERROR_ALREADY_EXISTS) {
+    HWND existing = ::FindWindowW(L"FLUTTER_RUNNER_WIN32_WINDOW", L"MF Lab");
+    if (existing) {
+      ::ShowWindow(existing, ::IsIconic(existing) ? SW_RESTORE : SW_SHOW);
+      ::SetForegroundWindow(existing);
+    }
+    ::CloseHandle(single_instance);
+    return EXIT_SUCCESS;
+  }
+
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -39,5 +53,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   ::CoUninitialize();
+  if (single_instance) ::CloseHandle(single_instance);
   return EXIT_SUCCESS;
 }

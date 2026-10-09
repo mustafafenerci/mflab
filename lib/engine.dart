@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'config.dart';
 import 'models.dart';
+import 'preflight.dart';
 
 typedef Log = void Function(String);
 
@@ -109,9 +110,22 @@ class Engine {
   }
 
   /// Komutu çalıştırır, çıktıyı canlı olarak [log]'a akıtır ve tüm çıktıyı döner.
+  ///
+  /// [heartbeat] açıksa, uzun süre çıktı gelmediğinde öğrenci takıldı sanmasın diye
+  /// her 30 saniyede bir "hâlâ çalışıyor" yazar.
   static Future<(int, String)> stream(String cmd, List<String> args,
-      {String? cwd, required Log log}) async {
+      {String? cwd, required Log log, bool heartbeat = false}) async {
     final buf = StringBuffer();
+    final started = DateTime.now();
+    var lastOutput = DateTime.now();
+    final timer = heartbeat
+        ? Timer.periodic(const Duration(seconds: 30), (_) {
+            if (DateTime.now().difference(lastOutput).inSeconds < 25) return;
+            final el = DateTime.now().difference(started);
+            log('… hâlâ çalışıyor (${el.inMinutes} dk ${el.inSeconds % 60} sn). '
+                'İnternet hızına göre birkaç dakika sürebilir, pencereyi kapatma.');
+          })
+        : null;
     final proc = await Process.start(cmd, args,
         workingDirectory: cwd, runInShell: true, environment: _env);
     final done = <Future<void>>[];
@@ -119,6 +133,7 @@ class Engine {
       final c = Completer<void>();
       done.add(c.future);
       s.transform(_utf8.decoder).listen((d) {
+        lastOutput = DateTime.now();
         buf.write(d);
         final t = d.trim();
         if (t.isNotEmpty) log(t);
@@ -126,6 +141,7 @@ class Engine {
     }
     await Future.wait(done);
     final code = await proc.exitCode;
+    timer?.cancel();
     return (code, buf.toString());
   }
 
@@ -211,13 +227,22 @@ class Engine {
       log('Docker çalışmıyor, Docker Desktop başlatılmaya çalışılıyor...');
       await _tryStartDockerDesktop();
       var ok = false;
-      for (var i = 0; i < 24 && !ok; i++) {
+      for (var i = 0; i < 36 && !ok; i++) {
         await Future.delayed(const Duration(seconds: 5));
         ok = await dockerRunning();
-        if (!ok) log('Docker bekleniyor... (${(i + 1) * 5} sn)');
+        if (!ok && i % 3 == 2) log('Docker bekleniyor... (${(i + 1) * 5} sn)');
       }
       if (!ok) {
-        log('✖ Docker başlamadı.');
+        log('✖ Docker 3 dakikada başlamadı.');
+        if (await Preflight.rebootPending()) {
+          log('   → Windows bir yeniden başlatma bekliyor (Docker/WSL yeni kurulduysa normaldir). '
+              'Bilgisayarı yeniden başlat, sonra tekrar "Kur"a bas.');
+        } else {
+          log('   → Docker Desktop penceresine bak: lisans sözleşmesi çıktıysa "Accept", giriş '
+              'ekranı çıktıysa "Skip" de. Sol altta yeşil "Engine running" yazınca tekrar "Kur"a bas.');
+          log('   → Hâlâ açılmıyorsa bilgisayarı yeniden başlat; o da olmazsa Hakkında → '
+              '"Sistem Durumunu Tara" ile ön kontrol yap.');
+        }
         return InstallResult(false,
             help: helpFor(cat, 'error during connect docker daemon'));
       }
@@ -292,7 +317,8 @@ class Engine {
 
     log('Konteynerler indiriliyor ve başlatılıyor (ilk seferde birkaç dakika sürebilir)...');
     var (code, out) =
-        await stream('docker', ['compose', 'up', '-d'], cwd: stack, log: log);
+        await stream('docker', ['compose', 'up', '-d'],
+            cwd: stack, log: log, heartbeat: true);
     // Derleme yalnızca imaj indirilemediyse işe yarar; port/Docker hatasında boşa 10 dk harcar.
     final firstHelp = code != 0 ? helpFor(cat, out) : null;
     final buildCanHelp = firstHelp == null ||
@@ -302,7 +328,7 @@ class Engine {
       log('Hazır imaj indirilemedi, imaj bu bilgisayarda derleniyor (5-10 dk sürebilir)...');
       (code, out) = await stream(
           'docker', ['compose', 'up', '-d', '--build'],
-          cwd: stack, log: log);
+          cwd: stack, log: log, heartbeat: true);
     }
     if (code != 0) {
       log('✖ Kurulum başarısız (kod $code).');
@@ -844,44 +870,14 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
 
   /// Öğrencinin sistem durumunu (Docker, WSL, RAM, Disk, Araçlar) tarar.
   static Future<void> diagnoseSystem(Log log) async {
-    log('\n=== 🔍 MF Lab Sistem & Donanım Tanısı ===');
-
-    await refreshPath();
-    // 1. Docker
-    final dInst = await dockerInstalled();
-    final dRun = await dockerRunning();
-    log(dRun
-        ? '✔ Docker: Çalışıyor (Engine hazır)'
-        : dInst
-            ? '⚠️ Docker: Kurulu fakat şu an ÇALIŞMIYOR. Docker Desktop\'ı açmalısın.'
-            : '✖ Docker: Kurulu DEĞİL.');
-
-    // 2. WSL
-    final wsl = await commandOk('wsl --status');
-    log(wsl ? '✔ WSL: Hazır ve aktif' : '⚠️ WSL: Bilgi alınamadı (Windows Home için WSL2 gerekebilir).');
-
-    // 3. VS Code & Git
+    await Preflight.run(log, needsDocker: true);
     final code = await commandOk('code --version');
-    log(code ? '✔ VS Code: Kurulu' : 'ℹ VS Code: Bulunamadı (Web tasarımı / kodlama için önerilir).');
+    log(code ? '✔ VS Code: Kurulu' : 'ℹ VS Code: Bulunamadı (kodlama için önerilir).');
     final git = await commandOk('git --version');
     log(git ? '✔ Git: Kurulu' : 'ℹ Git: Bulunamadı (Laravel/Composer için önerilir).');
-
-    // 4. Disk & RAM
-    try {
-      final r = await run('powershell', [
-        '-NoProfile',
-        '-Command',
-        r"$c = Get-PSDrive C; $free = [math]::Round($c.Free / 1GB, 1); "
-        r"$mem = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1); "
-        r"Write-Output ('RAM: ' + $mem + ' GB | C: Bos Alan: ' + $free + ' GB')"
-      ]);
-      if (r.exitCode == 0 && (r.stdout as String).trim().isNotEmpty) {
-        log('✔ Donanım: ${(r.stdout as String).trim()}');
-      }
-    } catch (_) {}
-
     log('===========================================\n'
-        'İpucu: Sorun yaşarsan yukarıdaki metni sağ üstteki "Kopyala" butonuyla hocana iletebilirsin.');
+        'İpucu: Sorun yaşarsan günlükteki "Yapay zekâya sor" düğmesini kullan ya da '
+        '"Kopyala" ile hocana ilet.');
   }
 
   /// Konteynerleri siler; [removeVolumes] true ise veritabanı verileri de silinir.

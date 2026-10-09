@@ -1,5 +1,64 @@
 [
   {
+    "id": "ratelimit",
+    "match": [
+      "toomanyrequests",
+      "pull rate limit",
+      "rate limit exceeded"
+    ],
+    "title": "Docker Hub indirme sınırı",
+    "explain": "Docker Hub, aynı internet adresinden kısa sürede çok fazla indirme yapılınca bir süre engeller. Okul ağında herkes aynı anda kurduğunda sık olur. 30–60 dakika bekleyip tekrar dene ya da kurulumu telefon interneti veya ev ağıyla yap. Docker Desktop'ta ücretsiz bir Docker hesabıyla giriş yapmak sınırı yükseltir.",
+    "url": "https://docs.docker.com/docker-hub/usage/"
+  },
+  {
+    "id": "certificate",
+    "match": [
+      "x509",
+      "certificate signed by unknown authority",
+      "tls: failed to verify",
+      "certificate is not valid",
+      "proxyconnect"
+    ],
+    "title": "Güvenli bağlantı (sertifika / proxy) sorunu",
+    "explain": "Bağlı olduğun ağ (çoğunlukla okul veya şirket ağı) HTTPS trafiğini denetliyor ya da bir proxy kullanıyor; Docker bu yüzden indirme sunucusuna güvenemiyor. Kurulumu telefon interneti (hotspot) veya ev ağıyla yap. Okul ağında kalıcı çözüm için bilgi işlem biriminden Docker için istisna iste.",
+    "url": "https://docs.docker.com/desktop/settings-and-maintenance/settings/#proxies"
+  },
+  {
+    "id": "wincontainers",
+    "match": [
+      "image operating system \"linux\" cannot be used",
+      "no matching manifest for windows",
+      "cannot be used on this platform"
+    ],
+    "title": "Docker yanlış modda (Windows konteynerleri)",
+    "explain": "Docker şu an Windows konteynerleri modunda; MF Lab Linux konteynerleri kullanır. Saatin yanındaki Docker (balina) simgesine sağ tıkla, \"Switch to Linux containers...\" seç, birkaç saniye bekle ve tekrar Kur'a bas.",
+    "url": "https://docs.docker.com/desktop/troubleshoot-and-support/faqs/windowsfaqs/"
+  },
+  {
+    "id": "wslupdate",
+    "match": [
+      "wsl 2 installation is incomplete",
+      "wsl --update",
+      "WSL kernel",
+      "wsl update"
+    ],
+    "title": "WSL 2 güncellenmeli",
+    "explain": "Docker'ın kullandığı Windows Linux Alt Sistemi (WSL) eksik ya da eski. Başlat menüsünde PowerShell'e sağ tıkla → Yönetici olarak çalıştır → \"wsl --update\" yaz. Bitince bilgisayarı yeniden başlat ve Docker Desktop'ı aç.",
+    "url": "https://learn.microsoft.com/tr-tr/windows/wsl/install"
+  },
+  {
+    "id": "access",
+    "match": [
+      "access is denied",
+      "erişim engellendi",
+      "permission denied",
+      "Erişim reddedildi"
+    ],
+    "title": "Erişim izni sorunu",
+    "explain": "Windows veya antivirüs programı bir dosyaya ya da klasöre erişimi engelledi. Okul bilgisayarındaysan bilgisayar sorumlusundan C:\\MFLab klasörü için izin iste. Kendi bilgisayarındaysan antivirüs programında MF Lab ve Docker'ı izin verilenlere ekle, sonra tekrar dene.",
+    "url": "https://support.microsoft.com/tr-tr/windows/denetimli-klas%C3%B6r-eri%C5%9Fimine-izin-verme"
+  },
+  {
     "id": "port",
     "match": [
       "port is already allocated",

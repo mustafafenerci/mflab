@@ -5,6 +5,7 @@ import 'config.dart';
 
 import 'engine.dart';
 import 'models.dart';
+import 'preflight.dart';
 import 'settings.dart';
 
 /// Uygulamanın ortak durumu: katalog, ayarlar, kurulum günlüğü, güncelleme bilgisi.
@@ -129,6 +130,8 @@ ${tail.join('\n')}
 
   /// Seçilen paketleri sırayla kurar: önce araçlar, sonra Docker paketleri.
   Future<void> install(Course course, Set<String> selected) async {
+    // Kurulum sürerken "Kur"a tekrar basılırsa iki kurulum çakışmasın.
+    if (busy) return;
     final cat = catalog!;
     _begin();
     currentCourseName = course.name;
@@ -143,6 +146,9 @@ ${tail.join('\n')}
       var vscodeOk = false;
       var allOk = true;
 
+      final needsDocker = pkgs.any((p) => p.isDocker);
+      final preflightOk = await Preflight.run(log, needsDocker: needsDocker);
+
       for (final p in pkgs) {
         log('\n=== ${p.name} ===');
         log('Neden kuruyoruz? ${p.why}');
@@ -150,6 +156,11 @@ ${tail.join('\n')}
           log('• $s');
         }
         if (p.isDocker) {
+          if (!preflightOk) {
+            log('Ön kontroldeki sorunlar giderilmeden bu paket kurulamaz; atlandı.');
+            allOk = false;
+            continue;
+          }
           if (!dockerOk) {
             log('Docker kurulu olmadığı için bu paket atlandı.');
             allOk = false;

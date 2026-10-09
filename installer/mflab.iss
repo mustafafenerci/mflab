@@ -3,7 +3,7 @@
 ; Önce: flutter build windows --release
 
 #ifndef MyAppVersion
-  #define MyAppVersion "1.1.5"
+  #define MyAppVersion "1.1.6"
 #endif
 
 #define MyAppName "MF Lab"
@@ -35,6 +35,9 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+; Güncelleme sırasında açık (tepsideki) MF Lab'ı kapatıp dosyaları güvenle değiştir.
+CloseApplications=force
+RestartApplications=no
 VersionInfoVersion={#MyAppVersion}.0
 VersionInfoTextVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
