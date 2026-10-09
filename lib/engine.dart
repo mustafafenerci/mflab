@@ -233,9 +233,88 @@ class Engine {
     await stream('docker', ['compose', 'stop'], cwd: stackDir(c, p), log: log);
   }
 
-  /// Konteynerleri siler; veritabanı volume'ları ve çalışma klasörü korunur.
-  static Future<void> remove(Course c, LabPackage p, Log log) async {
-    await stream('docker', ['compose', 'down'], cwd: stackDir(c, p), log: log);
+  /// Konteynerleri siler; [removeVolumes] true ise veritabanı verileri de silinir.
+  static Future<void> remove(Course c, LabPackage p, Log log,
+      {bool removeVolumes = false}) async {
+    final args = ['compose', 'down'];
+    if (removeVolumes) args.add('-v');
+    await stream('docker', args, cwd: stackDir(c, p), log: log);
+  }
+
+  /// Masaüstündeki `MF Lab - ders adı` kısayol klasörünü siler.
+  static Future<void> removeDesktopShortcuts(Course course, Log log) async {
+    final sb = StringBuffer()
+      ..writeln(r"$desktop = [Environment]::GetFolderPath('Desktop')")
+      ..writeln(
+          "\$dir = Join-Path \$desktop '${_ps('MF Lab - ${course.name}')}'")
+      ..writeln(r'if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }');
+
+    final tmp = File('${Directory.systemTemp.path}\\mflab_rm_shortcuts.ps1');
+    await tmp.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(sb.toString())]);
+    final r = await run('powershell', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      _q(tmp.path)
+    ]);
+    if (r.exitCode == 0) {
+      log('✔ Masaüstündeki "${course.name}" kısayolları temizlendi.');
+    }
+  }
+
+  /// Ders bittiğinde ortamı temizler / kaldırır.
+  static Future<void> uninstallCourse({
+    required Catalog catalog,
+    required Course course,
+    required bool removeVolumes,
+    required bool removeWorkspace,
+    required bool removeShortcuts,
+    required Log log,
+  }) async {
+    log('\n=== ${course.name} Ortamı Temizleniyor ===');
+    for (final id in course.packages) {
+      final p = catalog.packages[id];
+      if (p != null && p.isDocker) {
+        log('${p.name} konteynerleri durdurulup kaldırılıyor...');
+        await remove(course, p, log, removeVolumes: removeVolumes);
+        final stack = Directory(stackDir(course, p));
+        if (await stack.exists()) {
+          try {
+            await stack.delete(recursive: true);
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (removeShortcuts) {
+      await removeDesktopShortcuts(course, log);
+    }
+
+    if (removeWorkspace) {
+      final ws = Directory(workspaceDir(course));
+      if (await ws.exists()) {
+        log('Çalışma klasörün siliniyor: ${ws.path}');
+        try {
+          await ws.delete(recursive: true);
+          log('✔ Kod klasörü temizlendi.');
+        } catch (e) {
+          log('✖ Kod klasörü silinemedi: $e');
+        }
+      }
+    } else {
+      log('ℹ Kodların korundu: ${workspaceDir(course)}');
+    }
+
+    final cDir = Directory(courseDir(course));
+    if (await cDir.exists()) {
+      try {
+        final list = await cDir.list().toList();
+        if (list.isEmpty) await cDir.delete();
+      } catch (_) {}
+    }
+
+    log('🎉 "${course.name}" ortamı başarıyla kaldırıldı / temizlendi.');
   }
 
   static Future<void> runAction(

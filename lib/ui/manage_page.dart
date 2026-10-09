@@ -195,10 +195,13 @@ class _ServiceCard extends StatelessWidget {
                       icon: const Icon(Icons.auto_awesome, size: 18),
                       label: Text(a.label),
                     ),
-                TextButton.icon(
-                  onPressed: busy ? null : () => _confirmRemove(context),
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('Kaldır'),
+                FilledButton.tonalIcon(
+                  style: FilledButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                  onPressed: busy ? null : () => _showCourseUninstallDialog(context, e.course),
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                  label: const Text('Ders Bitti / Kaldır'),
                 ),
               ],
             ),
@@ -245,26 +248,116 @@ class _ServiceCard extends StatelessWidget {
         () => Engine.runAction(entry.course, entry.pkg, a, name, page.s.log));
   }
 
-  Future<void> _confirmRemove(BuildContext context) async {
-    final ok = await showDialog<bool>(
+  Future<void> _showCourseUninstallDialog(BuildContext context, Course course) async {
+    bool removeVolumes = false;
+    bool removeWorkspace = false;
+    bool removeShortcuts = true;
+
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Servisleri kaldır?'),
-        content: const Text(
-            'Konteynerler silinir. Çalışma klasöründeki dosyaların ve veritabanı verilerin korunur. İstersen sonra Dersler sayfasından yeniden kurabilirsin.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Vazgeç')),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Kaldır')),
-        ],
-      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade800),
+                  const SizedBox(width: 8),
+                  Text('${course.name} - Kaldır'),
+                ],
+              ),
+              content: SizedBox(
+                width: 480,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Dönem veya ders bittiğinde bu dersin oluşturduğu ortamı bilgisayarından temizleyebilirsin.',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blueGrey.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blueGrey.withValues(alpha: 0.2)),
+                        ),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Neler Yapılacak?', style: TextStyle(fontWeight: FontWeight.bold)),
+                            SizedBox(height: 4),
+                            Text('• İlgili Docker konteynerleri durdurulur ve silinir (RAM & disk ferahlar).'),
+                            Text('• Konfigürasyon ve stack tanımları temizlenir.'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: removeShortcuts,
+                        title: const Text('Masaüstü kısayollarını kaldır'),
+                        subtitle: const Text('Masaüstündeki "MF Lab - Ders" klasörü silinir.'),
+                        onChanged: (v) => setDialogState(() => removeShortcuts = v ?? true),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: removeVolumes,
+                        title: const Text('Veritabanı verilerini de kalıcı olarak sil'),
+                        subtitle: const Text(
+                          'MariaDB / PostgreSQL içindeki tüm tablolar ve kayıtlar silinir. (İşaretlemezsen verilerin ilerisi için saklanır).',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        onChanged: (v) => setDialogState(() => removeVolumes = v ?? false),
+                      ),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: removeWorkspace,
+                        title: const Text(
+                          'Yazdığım tüm kod dosyalarını da sil!',
+                          style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text(
+                          'DİKKAT: Çalışma klasöründeki (htdocs/sql) kodların ve projelerin tamamen silinir! Ödevlerini yedeklemediysen işaretleme.',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                        ),
+                        onChanged: (v) => setDialogState(() => removeWorkspace = v ?? false),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Vazgeç'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                  ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Evet, Ortamı Kaldır'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
-    if (ok == true) {
-      await page
-          ._task(() => Engine.remove(entry.course, entry.pkg, page.s.log));
+
+    if (confirmed == true) {
+      await page._task(() => Engine.uninstallCourse(
+            catalog: page.s.catalog!,
+            course: course,
+            removeVolumes: removeVolumes,
+            removeWorkspace: removeWorkspace,
+            removeShortcuts: removeShortcuts,
+            log: page.s.log,
+          ));
     }
   }
 }
