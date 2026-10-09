@@ -1,6 +1,6 @@
 {
-  "version": "1.1.0",
+  "version": "1.1.1",
   "url": "https://github.com/mustafafenerci/mflab/releases/latest",
-  "notes": "Coklu Proje Portali, Haftalik Odev Paketleme (.zip), Ornek Egitim Veritabanlari ve Port Doktoru.",
+  "notes": "Port cakismasinda otomatik bos porta gecis, Turkce karakter duzeltmesi ve Yapay zekaya sor ozelligi.",
   "mandatory": false
 }
