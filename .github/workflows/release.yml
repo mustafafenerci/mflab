@@ -17,7 +17,7 @@ jobs:
   windows-installer:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -55,7 +55,7 @@ jobs:
         run: |
           $h = (Get-FileHash dist\MFLab-Setup.exe -Algorithm SHA256).Hash.ToLower()
           "$h  MFLab-Setup.exe" | Out-File dist\MFLab-Setup.exe.sha256 -Encoding ascii
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.ver.outputs.tag_name }}
           files: |
