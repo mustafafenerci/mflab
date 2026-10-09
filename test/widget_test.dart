@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mflab/engine.dart';
+import 'package:mflab/settings.dart';
 
 void main() {
   test('PowerShell process encoding and argument passing', () async {
@@ -68,5 +70,26 @@ void main() {
     expect(Engine.isNewer('1.0.0', '1.0.0'), isFalse);
     expect(Engine.isNewer('0.9.9', '1.0.0'), isFalse);
   });
+
+  test('AppSettings load, save, and restore', () async {
+    final settings = AppSettings(
+      themeMode: ThemeMode.dark,
+      studentName: 'Mustafa Fenerci',
+      studentNumber: '123456789',
+      lastCourseId: 'web-programlama-2',
+      courseInstallDates: {'web-programlama-2': '2026-10-09T05:00:00'},
+    );
+
+    await settings.save();
+    expect(await File(AppSettings.filePath).exists(), isTrue);
+
+    final restored = await AppSettings.load();
+    expect(restored.themeMode, ThemeMode.dark);
+    expect(restored.studentName, 'Mustafa Fenerci');
+    expect(restored.studentNumber, '123456789');
+    expect(restored.lastCourseId, 'web-programlama-2');
+    expect(restored.courseInstallDates['web-programlama-2'], '2026-10-09T05:00:00');
+  });
 }
+
 

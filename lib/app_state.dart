@@ -2,25 +2,46 @@ import 'package:flutter/material.dart';
 
 import 'engine.dart';
 import 'models.dart';
+import 'settings.dart';
 
-/// Uygulamanın ortak durumu: katalog, kurulum günlüğü, güncelleme bilgisi.
+/// Uygulamanın ortak durumu: katalog, ayarlar, kurulum günlüğü, güncelleme bilgisi.
 class AppState extends ChangeNotifier {
   Catalog? catalog;
   UpdateInfo? update;
   bool updateDismissed = false;
   bool checkedUpdate = false;
 
-  ThemeMode themeMode = ThemeMode.system;
+  AppSettings settings = AppSettings();
+
+  ThemeMode get themeMode => settings.themeMode;
+  String get studentName => settings.studentName;
+  String get studentNumber => settings.studentNumber;
+  String? get lastCourseId => settings.lastCourseId;
 
   void cycleTheme() {
-    if (themeMode == ThemeMode.system) {
-      themeMode = ThemeMode.light;
-    } else if (themeMode == ThemeMode.light) {
-      themeMode = ThemeMode.dark;
+    if (settings.themeMode == ThemeMode.system) {
+      settings.themeMode = ThemeMode.light;
+    } else if (settings.themeMode == ThemeMode.light) {
+      settings.themeMode = ThemeMode.dark;
     } else {
-      themeMode = ThemeMode.system;
+      settings.themeMode = ThemeMode.system;
     }
+    settings.save();
     notifyListeners();
+  }
+
+  void setStudentInfo(String name, String number) {
+    settings.studentName = name;
+    settings.studentNumber = number;
+    settings.save();
+    notifyListeners();
+  }
+
+  void setLastCourse(String courseId) {
+    if (settings.lastCourseId != courseId) {
+      settings.lastCourseId = courseId;
+      settings.save();
+    }
   }
 
   final logs = <String>[];
@@ -30,6 +51,7 @@ class AppState extends ChangeNotifier {
   bool logVisible = false;
 
   Future<void> init() async {
+    settings = await AppSettings.load();
     catalog = await Catalog.load();
     notifyListeners();
     await checkUpdate();
@@ -143,6 +165,8 @@ class AppState extends ChangeNotifier {
 
       if (allOk) {
         finishedCourse = course;
+        settings.courseInstallDates[course.id] = DateTime.now().toIso8601String();
+        settings.save();
         log('\n🎉 Hazır! Ders ortamın kuruldu.');
       } else {
         log('\nBazı adımlar tamamlanmadı. Yukarıdaki açıklamaları oku, sorunu giderip tekrar "Kur"a bas.');

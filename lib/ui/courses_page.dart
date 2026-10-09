@@ -19,6 +19,19 @@ class _CoursesPageState extends State<CoursesPage> {
 
   AppState get s => widget.state;
 
+  @override
+  void initState() {
+    super.initState();
+    final cat = s.catalog;
+    if (cat != null && s.lastCourseId != null) {
+      final last = cat.courses.where((c) => c.id == s.lastCourseId).firstOrNull;
+      if (last != null) {
+        course = last;
+        selected.addAll(last.packages);
+      }
+    }
+  }
+
   void pick(Course c) {
     setState(() {
       course = c;
@@ -26,6 +39,7 @@ class _CoursesPageState extends State<CoursesPage> {
         ..clear()
         ..addAll(c.packages);
     });
+    s.setLastCourse(c.id);
   }
 
   @override

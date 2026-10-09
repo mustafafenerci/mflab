@@ -422,8 +422,8 @@ class _ServiceCard extends StatelessWidget {
   }
 
   Future<void> _exportHomeworkDialog(BuildContext context) async {
-    final nameCtrl = TextEditingController();
-    final noCtrl = TextEditingController();
+    final nameCtrl = TextEditingController(text: page.s.studentName);
+    final noCtrl = TextEditingController(text: page.s.studentNumber);
 
     final ok = await showDialog<bool>(
       context: context,
@@ -471,11 +471,14 @@ class _ServiceCard extends StatelessWidget {
     );
 
     if (ok == true) {
+      final name = nameCtrl.text.trim();
+      final no = noCtrl.text.trim();
+      page.s.setStudentInfo(name, no);
       await page._task(() => Engine.exportHomeworkZip(
             course: entry.course,
             catalog: page.s.catalog!,
-            studentName: nameCtrl.text.trim(),
-            studentNumber: noCtrl.text.trim(),
+            studentName: name,
+            studentNumber: no,
             log: page.s.log,
           ));
     }
