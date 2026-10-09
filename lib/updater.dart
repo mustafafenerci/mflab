@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 
 import 'config.dart';
@@ -60,14 +61,15 @@ class Updater {
     }
   }
 
+  /// Dosyanın SHA-256 özeti. PowerShell'e bağlı değil: bazı bilgisayarlarda (PowerShell 7 kurulu
+  /// olanlar, GitHub Actions) Windows PowerShell'in Get-FileHash komutu boş dönebiliyor.
   static Future<String?> sha256Of(File f) async {
-    final r = await Process.run('powershell', [
-      '-NoProfile',
-      '-Command',
-      "(Get-FileHash -Algorithm SHA256 -LiteralPath '${f.path.replaceAll("'", "''")}').Hash"
-    ]);
-    final h = (r.stdout as String).trim().toLowerCase();
-    return h.length == 64 ? h : null;
+    try {
+      final digest = await sha256.bind(f.openRead()).first;
+      return digest.toString();
+    } catch (_) {
+      return null;
+    }
   }
 
   /// GitHub'daki beklenen özet ile indirilen dosyanın gerçek özeti.
