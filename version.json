@@ -1,6 +1,6 @@
 {
-  "version": "1.2.2",
+  "version": "1.2.3",
   "url": "https://github.com/mustafafenerci/mflab/releases/latest",
-  "notes": "Güvenlik: veritabanı ve yönetim ekranları (MariaDB, PostgreSQL, phpMyAdmin, pgAdmin) artık yalnızca bu bilgisayardan erişilebilir; aynı ağdaki başkaları root/root ile bağlanamaz. Mevcut kurulumlar bir sonraki Başlat'ta otomatik güncellenir.",
+  "notes": "Docker kapalıyken Başlat, yedekleme, örnek veritabanı gibi işlemler artık Docker'ı kendisi açıp hazır olmasını bekler; açılamazsa ne yapacağını Türkçe anlatır. pgAdmin'in hiç açılmamasına yol açan e-posta hatası düzeltildi.",
   "mandatory": false
 }

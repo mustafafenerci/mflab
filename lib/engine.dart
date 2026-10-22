@@ -505,6 +505,22 @@ class Engine {
     return InstallResult(true);
   }
 
+  /// Docker gerektiren her işlemin başında çağrılır: Docker kurulu değilse ya da kapalıysa
+  /// öğrenciye ne olduğunu açıkça söyler, kapalıysa kendisi açıp hazır olmasını bekler.
+  /// `false` dönerse işlem yapılmaz (açıklama günlüğe yazılmıştır).
+  static Future<bool> requireDocker(Log log) async {
+    await refreshPath();
+    if (!await dockerInstalled()) {
+      log('✖ Docker bu bilgisayarda kurulu değil.');
+      log('   → Docker olmadan bu işlem yapılamaz. "Dersler" sayfasından dersi seçip "Kur"a bas; '
+          'Docker Desktop indirme sayfası açılır.');
+      return false;
+    }
+    if (await dockerRunning()) return true;
+    log('ℹ Docker şu an kapalı. MF Lab Docker\'ı senin yerine açıyor, hazır olunca işleme devam edecek...');
+    return ensureDockerRunning(log);
+  }
+
   /// Docker Desktop hiç açılmamışsa (ilk kurulum) ya da kapanmışsa açar ve motorun
   /// hazır olmasını bekler. İlk açılış WSL'i hazırladığı için 2-5 dk sürebilir; bu yüzden
   /// 6 dakika beklenir ve takılırsa öğrenciye ne yapacağı adım adım yazılır.
@@ -912,6 +928,10 @@ try {
 </html>
 ''');
     } else if (template == 'laravel') {
+      if (!await requireDocker(log)) {
+        await targetDir.delete();
+        throw StateError('Docker çalışmıyor.');
+      }
       log('Laravel projesi kuruluyor (birkaç dakika sürebilir)...');
       await targetDir.delete();
       final stack = '${courseDir(course)}${Os.sep}.stack${Os.sep}web2-stack';
@@ -1087,6 +1107,7 @@ try {
     required Log log,
   }) async {
     log('\n=== 🗄️ Örnek Veritabanı Yükleniyor ($sampleKey) ===');
+    if (!await requireDocker(log)) return;
     final stack = '${courseDir(course)}${Os.sep}.stack${Os.sep}web2-stack';
     final vtysStack = '${courseDir(course)}${Os.sep}.stack${Os.sep}vtys-stack';
     final targetStack = (await Directory(stack).exists()) ? stack : vtysStack;
@@ -1234,6 +1255,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
   /// Kullanılmayan Docker konteyner ve önbelleklerini temizler.
   static Future<void> cleanDocker(Log log) async {
     log('\n=== 🧹 Docker Sistem & Önbellek Temizliği ===');
+    if (!await requireDocker(log)) return;
     log('Kullanılmayan önbellekler temizleniyor...');
     await stream('docker', ['system', 'prune', '-f'], log: log);
     log('✔ Docker önbellek temizliği tamamlandı.');
@@ -1267,6 +1289,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
         await _writePortal(workspaceDir(c));
       } catch (_) {}
     }
+    if (!await requireDocker(log)) return;
     // Eski sürümle kurulmuş yığınların compose dosyası da güvenli sürüme yükseltilir.
     try {
       await File('${stackDir(c, p)}${Os.sep}compose.yml').writeAsString(
@@ -1278,12 +1301,17 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
   }
 
   static Future<void> stop(Course c, LabPackage p, Log log) async {
+    if (!await dockerRunning()) {
+      log('ℹ Docker kapalı olduğu için servisler zaten durmuş durumda.');
+      return;
+    }
     await stream('docker', ['compose', 'stop'], cwd: stackDir(c, p), log: log);
   }
 
   /// Konteyner loglarını (son 60 satır) ekrana akıtır.
   static Future<void> showLogs(Course c, LabPackage p, Log log) async {
     log('\n=== ${p.name} Son Loglar ===');
+    if (!await requireDocker(log)) return;
     await stream('docker', ['compose', 'logs', '--tail', '60'],
         cwd: stackDir(c, p), log: log);
   }
@@ -1303,6 +1331,10 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
   /// Konteynerleri siler; [removeVolumes] true ise veritabanı verileri de silinir.
   static Future<void> remove(Course c, LabPackage p, Log log,
       {bool removeVolumes = false}) async {
+    if (!await dockerRunning()) {
+      log('ℹ Docker kapalı; kaldırılacak çalışan konteyner yok.');
+      return;
+    }
     final args = ['compose', 'down'];
     if (removeVolumes) args.add('-v');
     await stream('docker', args, cwd: stackDir(c, p), log: log);
@@ -1395,6 +1427,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
 
   static Future<void> runAction(
       Course c, LabPackage p, PackageAction a, String? name, Log log) async {
+    if (!await requireDocker(log)) return;
     final cmd = a.command.replaceAll('{name}', name ?? '');
     log('Çalıştırılıyor: $cmd');
     final (code, _) = await stream(
@@ -1823,6 +1856,7 @@ GitHub         : ${AppConfig.repoUrl}
     final outPath = '$desktop${Os.sep}$fileName';
 
     log('\n=== Veritabanı Yedeği Alınıyor ===');
+    if (!await requireDocker(log)) return null;
     log('Hedef dosya: $outPath');
 
     final args = p.id == 'web2-stack'
@@ -1842,6 +1876,7 @@ GitHub         : ${AppConfig.repoUrl}
   static Future<bool> importDatabase(
       Course c, LabPackage p, String sqlFilePath, Log log) async {
     log('\n=== Veritabanı İçe Aktarılıyor ===');
+    if (!await requireDocker(log)) return false;
     log('Kaynak dosya: $sqlFilePath');
     final stack = stackDir(c, p);
 
@@ -1964,6 +1999,7 @@ GitHub         : ${AppConfig.repoUrl}
   static Future<bool> importDockerTar(String tarPath, Log log) async {
     log('\n=== 📥 Çevrimdışı İmaj Yükleniyor (.tar) ===');
     log('Dosya: $tarPath');
+    if (!await requireDocker(log)) return false;
     final (code, _) = await stream('docker', ['load', '-i', tarPath], log: log);
     if (code == 0) {
       log('✔ İmajlar başarıyla Docker\'a aktarıldı.');

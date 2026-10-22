@@ -5,7 +5,7 @@ import 'platform.dart';
 /// kendi GitHub deposunu ve imajını gösterebilir.
 class AppConfig {
   static const appName = 'MF Lab';
-  static const appVersion = '1.2.2';
+  static const appVersion = '1.2.3';
   static const author = 'Mustafa Fenerci';
   static const githubUser = 'mustafafenerci';
   static const githubRepo = 'mflab';

@@ -18,5 +18,5 @@
     "Konteynerler başlatılıyor",
     "Masaüstü kısayolları oluşturuluyor"
   ],
-  "info": "pgAdmin: http://localhost:6350 (e-posta: admin@mflab.local, şifre: admin) | PostgreSQL: localhost:6332 (kullanıcı: postgres, şifre: postgres) | phpMyAdmin: http://localhost:6382 | MariaDB: localhost:6307 (kullanıcı: root, şifre: root) | .sql dosyaların konteynerde /sql klasöründe görünür"
+  "info": "pgAdmin: http://localhost:6350 (e-posta: admin@mflab.dev, şifre: admin) | PostgreSQL: localhost:6332 (kullanıcı: postgres, şifre: postgres) | phpMyAdmin: http://localhost:6382 | MariaDB: localhost:6307 (kullanıcı: root, şifre: root) | .sql dosyaların konteynerde /sql klasöründe görünür"
 }
