@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'config.dart';
 
 import 'engine.dart';
@@ -154,6 +155,50 @@ Kurulum başarısız oldu veya hata verdi. Aşağıdaki kurulum günlüğüne ba
 --- Kurulum günlüğü ---
 ${tail.join('\n')}
 --- Günlük sonu ---''';
+  }
+
+  /// Hocaya gidecek hazır e-posta (mailto). Adres uzunluğu sınırlı olduğu için günlüğün yalnızca
+  /// sonu eklenir; tamamı panoya kopyalanır ve iletide yapıştırılması istenir.
+  String buildMailtoUri() {
+    final who = settings.studentNumber.isEmpty && settings.studentName.isEmpty
+        ? '-'
+        : '${settings.studentNumber} ${settings.studentName}'.trim();
+    String build(int lines) {
+      final tail = logs.length > lines ? logs.sublist(logs.length - lines) : logs;
+      final body = 'Merhaba hocam,\n\n'
+          '${AppConfig.appName} ile ilgili bir sorun yaşadım.\n\n'
+          'Ne olduğunu kısaca yaz: \n\n\n'
+          '--- Bilgiler (silme) ---\n'
+          'Öğrenci: $who\n'
+          'Ders: ${currentCourseName ?? '-'}\n'
+          'Sürüm: ${AppConfig.appVersion}\n'
+          'Sistem: ${Os.name} (${Platform.operatingSystemVersion})\n\n'
+          '--- Günlüğün son satırları (tamamı için Ctrl+V ile yapıştır) ---\n'
+          '${tail.join('\n')}\n';
+      final subject = '${AppConfig.appName} sorun bildirimi - v${AppConfig.appVersion} ($who)';
+      return 'mailto:${AppConfig.supportEmail}'
+          '?subject=${Uri.encodeComponent(subject)}'
+          '&body=${Uri.encodeComponent(body)}';
+    }
+
+    var lines = 40;
+    var uri = build(lines);
+    while (uri.length > 1900 && lines > 0) {
+      lines = lines > 10 ? lines - 5 : (lines > 2 ? lines - 2 : 0);
+      uri = build(lines);
+    }
+    return uri;
+  }
+
+  /// Tam günlüğü panoya koyar ve e-posta programını açar.
+  Future<void> sendMailReport() async {
+    final full = StringBuffer()
+      ..writeln('${AppConfig.appName} v${AppConfig.appVersion} - ${Os.name} (${Platform.operatingSystemVersion})')
+      ..writeln('Ders: ${currentCourseName ?? '-'}')
+      ..writeln()
+      ..writeln(logs.join('\n'));
+    await Clipboard.setData(ClipboardData(text: full.toString()));
+    await Engine.openMailto(buildMailtoUri());
   }
 
   void hideLog() {

@@ -26,12 +26,12 @@ flutter analyze && flutter test --exclude-tags network
 
 # macOS (on a Mac)
 flutter build macos --release
-bash scripts/package_macos.sh 1.2.0 dist        # dist/MFLab-v1.2.0-macos.dmg
+bash scripts/package_macos.sh 1.2.1 dist        # dist/MFLab-v1.2.1-macos.dmg
 
 # Linux (on Ubuntu/Debian)
 sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
 flutter build linux --release
-bash scripts/package_linux.sh 1.2.0 dist        # .deb and .tar.gz
+bash scripts/package_linux.sh 1.2.1 dist        # .deb and .tar.gz
 ```
 
 ## macOS signing and notarization

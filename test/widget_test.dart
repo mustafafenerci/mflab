@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mflab/app_state.dart';
 import 'package:mflab/config.dart';
 import 'package:mflab/engine.dart';
 import 'package:mflab/models.dart';
@@ -330,5 +331,24 @@ void main() {
       expect(r.where((c) => c.level == CheckLevel.fail).map((c) => c.title),
           contains('Docker'));
     });
+  });
+
+  test('sorun bildirimi: mailto hocaya gider, adres 2000 karakteri aşmaz', () {
+    final st = AppState()..currentCourseName = 'Web Programlama II';
+    st.settings.studentName = 'Ayşe Yılmaz';
+    st.settings.studentNumber = '2026101';
+    for (var i = 0; i < 500; i++) {
+      st.logs.add('satır $i: Türkçe karakterli & özel ? = # günlük çıktısı');
+    }
+    final uri = st.buildMailtoUri();
+    expect(uri, startsWith('mailto:${AppConfig.supportEmail}?subject='));
+    expect(uri.length, lessThanOrEqualTo(1900));
+    final parsed = Uri.parse(uri);
+    expect(parsed.path, AppConfig.supportEmail);
+    expect(parsed.queryParameters['subject'], contains('2026101'));
+    final body = parsed.queryParameters['body']!;
+    expect(body, contains('Web Programlama II'));
+    expect(body, contains('satır 499'));
+    expect(body, isNot(contains('satır 0:')));
   });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_state.dart';
+import '../config.dart';
 import '../engine.dart';
 
 IconData courseIcon(String name) {
@@ -60,6 +61,7 @@ class _LogPanelState extends State<LogPanel> {
                       child: CircularProgressIndicator(strokeWidth: 2)),
                 ],
                 const Spacer(),
+                if (!s.busy && s.logs.isNotEmpty) _MailButton(state: s),
                 if (!s.busy && s.logs.isNotEmpty) _AskAiButton(state: s),
                 IconButton(
                   tooltip: 'Günlüğü kopyala (hocana göndermek için)',
@@ -104,6 +106,47 @@ class _LogPanelState extends State<LogPanel> {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Günlük panoya kopyalandı.')));
     }
+  }
+}
+
+/// Hazır bir e-posta açar (alıcı: hoca); tam günlük panoya da kopyalanır.
+class _MailButton extends StatelessWidget {
+  const _MailButton({required this.state});
+  final AppState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message:
+          'E-posta programını hazır bir iletiyle açar. Günlüğün tamamı da panoya kopyalanır; iletiye yapıştırabilirsin.',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () async {
+          await state.sendMailReport();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                duration: Duration(seconds: 8),
+                content: Text(
+                    'E-posta açıldı. Günlüğün tamamı panoda: iletide "Ctrl+V" ile yapıştırıp gönder. '
+                    'E-posta programı açılmadıysa ${AppConfig.supportEmail} adresine yaz.')));
+          }
+        },
+        child: Container(
+          margin: const EdgeInsets.only(right: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white38),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.mail_outline, size: 15, color: Colors.white70),
+            SizedBox(width: 6),
+            Text('Hocaya mail at',
+                style: TextStyle(fontSize: 12, color: Colors.white70)),
+          ]),
+        ),
+      ),
+    );
   }
 }
 

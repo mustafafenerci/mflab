@@ -1,6 +1,6 @@
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
   "url": "https://github.com/mustafafenerci/mflab/releases/latest",
-  "notes": "MF Lab artık macOS ve Linux için de var (indirme sayfasında .dmg ve .deb). Windows sürümü aynı kalır; Docker ilk açılışı ve PHP güvenlik güncellemesi iyileştirildi.",
+  "notes": "Sorun yaşarsan günlük panelindeki \"Hocaya mail at\" düğmesi hazır bir e-posta açar (günlük panoya da kopyalanır). macOS ve Linux sürümleri indirme sayfasında.",
   "mandatory": false
 }

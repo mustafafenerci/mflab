@@ -5,11 +5,14 @@ import 'platform.dart';
 /// kendi GitHub deposunu ve imajını gösterebilir.
 class AppConfig {
   static const appName = 'MF Lab';
-  static const appVersion = '1.2.0';
+  static const appVersion = '1.2.1';
   static const author = 'Mustafa Fenerci';
   static const githubUser = 'mustafafenerci';
   static const githubRepo = 'mflab';
   static const license = 'MIT';
+
+  /// Sorun bildirimlerinin gideceği adres (uygulamadaki "Hocaya mail at" düğmesi).
+  static const supportEmail = 'mustafa.fenerci@kapadokya.edu.tr';
 
   static const repoUrl = 'https://github.com/$githubUser/$githubRepo';
   static const releasesUrl = '$repoUrl/releases/latest';

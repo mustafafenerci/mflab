@@ -80,6 +80,11 @@ class AboutPage extends StatelessWidget {
                       label: const Text('Öğrenci Bilgilerini Düzenle'),
                     ),
                     OutlinedButton.icon(
+                      onPressed: state.sendMailReport,
+                      icon: const Icon(Icons.mail_outline, size: 18),
+                      label: const Text('Hocaya Sorun Bildir (mail)'),
+                    ),
+                    OutlinedButton.icon(
                       onPressed: () => Engine.openFolder(AppConfig.baseDir),
                       icon: const Icon(Icons.folder_open, size: 18),
                       label: const Text('MF Lab Klasörünü Aç'),

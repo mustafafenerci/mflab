@@ -195,6 +195,16 @@ class Engine {
     }
   }
 
+  /// Varsayılan e-posta programında hazır bir ileti açar. Windows'ta `cmd start` kullanılmaz:
+  /// adresteki `&` işaretini komut ayracı sayıp iletiyi keserdi.
+  static Future<void> openMailto(String uri) async {
+    if (Os.isWindows) {
+      await _launch('rundll32', ['url.dll,FileProtocolHandler', uri]);
+    } else {
+      await _launch(Os.isMac ? 'open' : 'xdg-open', [uri]);
+    }
+  }
+
   static Future<void> openFolder(String path) async {
     await Directory(path).create(recursive: true);
     if (Os.isWindows) {
