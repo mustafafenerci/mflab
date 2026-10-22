@@ -1,5 +1,10 @@
 FROM php:8.3-apache
 
+# CVE-2026-109618 / CVE-2026-109619 (uzaktan kod çalıştırma) PHP 8.3.36'da kapatıldı.
+# Daha eski bir taban imaj gelirse derleme burada durur; yamasız PHP ile imaj üretilmez.
+RUN php -r 'exit(version_compare(PHP_VERSION, "8.3.36", ">=") ? 0 : 1);' \
+    || (echo "PHP $(php -r 'echo PHP_VERSION;') yamasiz: en az 8.3.36 gerekli" >&2; exit 1)
+
 LABEL org.opencontainers.image.title="mflab-php-web" \
       org.opencontainers.image.description="MF Lab: Apache + PHP 8.3 + Composer + Git + Node.js (Laravel ready)" \
       org.opencontainers.image.source="https://github.com/mustafafenerci/mflab" \

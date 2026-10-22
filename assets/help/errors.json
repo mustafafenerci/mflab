@@ -80,7 +80,7 @@
       "pipe/docker"
     ],
     "title": "Docker çalışmıyor",
-    "explain": "Docker kurulu ama başlatılmamış. Başlat menüsünden Docker Desktop'ı aç, sol altta yeşil 'Engine running' yazısını bekle, sonra tekrar dene.",
+    "explain": "Docker kurulu ama başlatılamadı. Docker Desktop ilk kez açılıyorsa 2-5 dakika sürer; pencere çıkarsa lisans için 'Accept', giriş ekranı için 'Skip' de. Sol altta yeşil 'Engine running' yazısını bekle, sonra tekrar dene. Açılmazsa oturumu kapatıp aç (docker-users grubu için) veya bilgisayarı yeniden başlat.",
     "url": "https://docs.docker.com/desktop/troubleshoot-and-support/troubleshoot/"
   },
   {

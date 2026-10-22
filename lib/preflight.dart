@@ -33,6 +33,7 @@ class SystemFacts {
     this.dockerInstalled = false,
     this.dockerRunning = false,
     this.dockerOs,
+    this.dockerUsersMissing = false,
     Map<String, String?>? network,
   }) : network = network ?? {};
 
@@ -47,6 +48,9 @@ class SystemFacts {
   final bool baseDirWritable;
   final bool dockerInstalled;
   final bool dockerRunning;
+
+  /// docker-users grubu var ama bu oturum o grupta değil (oturumu kapatıp açmak gerekir).
+  final bool dockerUsersMissing;
 
   /// `docker version` sunucu işletim sistemi: 'linux' veya 'windows'.
   final String? dockerOs;
@@ -80,6 +84,8 @@ $d = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='C:'"
 $o.freeGb = [math]::Round($d.FreeSpace / 1GB, 1)
 $o.admin = @((whoami /groups) -match 'S-1-5-32-544').Count -gt 0
 $o.reboot = (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') -or (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired')
+$null = net localgroup docker-users 2>&1
+if ($LASTEXITCODE -eq 0) { $o.dockerUsers = @((whoami /groups) -match 'docker-users').Count -gt 0 }
 $o | ConvertTo-Json -Compress
 ''';
 
@@ -104,6 +110,11 @@ $o | ConvertTo-Json -Compress
 
   static Future<bool> rebootPending() async =>
       (await _systemJson())['reboot'] == true;
+
+  /// Docker kurulmuş (docker-users grubu var) ama bu oturum o grupta değil: Docker Desktop
+  /// bu durumda açılmaz. Kurulumdan sonra oturumu kapatıp açmak gerekir.
+  static Future<bool> dockerUsersMissing() async =>
+      (await _systemJson())['dockerUsers'] == false;
 
   static Future<bool> _baseDirWritable() async {
     try {
@@ -197,6 +208,7 @@ $o | ConvertTo-Json -Compress
       dockerInstalled: dInst,
       dockerRunning: dRun,
       dockerOs: dOs,
+      dockerUsersMissing: sys['dockerUsers'] == false,
       network: net,
     );
   }
@@ -304,6 +316,11 @@ $o | ConvertTo-Json -Compress
               ? 'Okul bilgisayarıysan bilgisayar sorumlusundan Docker Desktop kurmasını iste. '
                   'Kendi bilgisayarındaysan yönetici hesabıyla oturum aç.'
               : 'Docker Desktop\'ı kur, bilgisayarı yeniden başlat, Docker\'ı bir kez açıp lisansı kabul et.'));
+    } else if (!f.dockerRunning && f.dockerUsersMissing) {
+      r.add(const CheckResult(CheckLevel.warn, 'Docker Desktop',
+          'Kurulu ama bu Windows oturumu "docker-users" grubunda değil; Docker Desktop açılamayabilir.',
+          fix: 'Docker kurulumundan sonra oturumu kapatıp yeniden aç (veya bilgisayarı yeniden başlat). '
+              'Olmazsa yönetici komut satırında "net localgroup docker-users KULLANICIADIN /add" yaz.'));
     } else if (!f.dockerRunning) {
       r.add(const CheckResult(CheckLevel.warn, 'Docker Desktop',
           'Kurulu ama çalışmıyor. MF Lab başlatmayı deneyecek.',

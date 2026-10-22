@@ -259,29 +259,9 @@ class Engine {
       log('✖ Docker bulunamadı. Önce Docker Desktop kurulmalı.');
       return InstallResult(false);
     }
-    if (!await dockerRunning()) {
-      log('Docker çalışmıyor, Docker Desktop başlatılmaya çalışılıyor...');
-      await _tryStartDockerDesktop();
-      var ok = false;
-      for (var i = 0; i < 36 && !ok; i++) {
-        await Future.delayed(const Duration(seconds: 5));
-        ok = await dockerRunning();
-        if (!ok && i % 3 == 2) log('Docker bekleniyor... (${(i + 1) * 5} sn)');
-      }
-      if (!ok) {
-        log('✖ Docker 3 dakikada başlamadı.');
-        if (await Preflight.rebootPending()) {
-          log('   → Windows bir yeniden başlatma bekliyor (Docker/WSL yeni kurulduysa normaldir). '
-              'Bilgisayarı yeniden başlat, sonra tekrar "Kur"a bas.');
-        } else {
-          log('   → Docker Desktop penceresine bak: lisans sözleşmesi çıktıysa "Accept", giriş '
-              'ekranı çıktıysa "Skip" de. Sol altta yeşil "Engine running" yazınca tekrar "Kur"a bas.');
-          log('   → Hâlâ açılmıyorsa bilgisayarı yeniden başlat; o da olmazsa Hakkında → '
-              '"Sistem Durumunu Tara" ile ön kontrol yap.');
-        }
-        return InstallResult(false,
-            help: helpFor(cat, 'error during connect docker daemon'));
-      }
+    if (!await ensureDockerRunning(log)) {
+      return InstallResult(false,
+          help: helpFor(cat, 'error during connect docker daemon'));
     }
 
     final stack = stackDir(course, p);
@@ -370,12 +350,132 @@ class Engine {
       log('✖ Kurulum başarısız (kod $code).');
       return InstallResult(false, help: helpFor(cat, out));
     }
+    if (p.buildContext != null) await ensurePatchedPhp(course, p, log);
     log('✔ ${p.name} hazır.');
     log(mapText(course.id, p.id, p.info));
     return InstallResult(true);
   }
 
-  static Future<void> _tryStartDockerDesktop() async {
+  /// Docker Desktop hiç açılmamışsa (ilk kurulum) ya da kapanmışsa açar ve motorun
+  /// hazır olmasını bekler. İlk açılış WSL'i hazırladığı için 2-5 dk sürebilir; bu yüzden
+  /// 6 dakika beklenir ve takılırsa öğrenciye ne yapacağı adım adım yazılır.
+  static Future<bool> ensureDockerRunning(Log log) async {
+    if (await dockerRunning()) return true;
+    log('Docker çalışmıyor, Docker Desktop açılıyor...');
+    log('İlk kez açılıyorsa Docker kendini hazırlar; 2-5 dakika sürebilir, bekle.');
+    await _tryStartDockerDesktop();
+    for (var i = 0; i < 72; i++) {
+      await Future.delayed(const Duration(seconds: 5));
+      if (await dockerRunning()) {
+        log('✔ Docker hazır.');
+        return true;
+      }
+      final sec = (i + 1) * 5;
+      if (sec == 30 && !await _dockerDesktopProcessAlive()) {
+        log('Docker Desktop penceresi görünmedi, yeniden açılıyor...');
+        await _tryStartDockerDesktop();
+      } else if (sec == 120) {
+        log('Docker hâlâ hazır değil, Docker Desktop yeniden başlatılıyor...');
+        await _tryStartDockerDesktop(restart: true);
+      } else if (sec == 90) {
+        log('   → Docker Desktop penceresi açıldıysa: lisans sözleşmesi çıktıysa "Accept", '
+            'giriş ekranı çıktıysa "Skip" de. Pencere yoksa saatin yanındaki balina simgesine bak.');
+      } else if (sec % 30 == 0) {
+        log('Docker bekleniyor... ($sec sn)');
+      }
+    }
+    log('✖ Docker 6 dakikada hazır olmadı.');
+    if (await Preflight.rebootPending()) {
+      log('   → Windows bir yeniden başlatma bekliyor (Docker/WSL yeni kurulduysa normaldir). '
+          'Bilgisayarı yeniden başlat, sonra tekrar "Kur"a bas.');
+    } else if (await Preflight.dockerUsersMissing()) {
+      log('   → Windows hesabın "docker-users" grubunda görünmüyor. Docker kurulumundan sonra '
+          'oturumu kapatıp yeniden aç (veya bilgisayarı yeniden başlat), sonra tekrar "Kur"a bas.');
+    } else {
+      log('   → Docker Desktop penceresine bak: lisans sözleşmesi çıktıysa "Accept", giriş '
+          'ekranı çıktıysa "Skip" de. Sol altta yeşil "Engine running" yazınca tekrar "Kur"a bas.');
+      log('   → Hâlâ açılmıyorsa bilgisayarı yeniden başlat; o da olmazsa Hakkında → '
+          '"Sistem Durumunu Tara" ile ön kontrol yap.');
+    }
+    return false;
+  }
+
+  static Future<bool> _dockerDesktopProcessAlive() async {
+    try {
+      final r = await Process.run(
+          'tasklist', ['/FI', 'IMAGENAME eq Docker Desktop.exe', '/NH']);
+      return (r.stdout as String).toLowerCase().contains('docker desktop.exe');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Uzaktan kod çalıştırmaya izin veren CVE-2026-109618 / CVE-2026-109619 bu sürümde kapalı.
+  static const minPhpVersion = '8.3.36';
+
+  /// `a >= b` için noktalı sürüm karşılaştırması (8.3.9 < 8.3.36).
+  static bool versionAtLeast(String a, String b) {
+    List<int> parts(String v) => RegExp(r'\d+')
+        .allMatches(v.split(RegExp(r'[-+~]')).first)
+        .map((m) => int.parse(m.group(0)!))
+        .toList();
+    final x = parts(a), y = parts(b);
+    for (var i = 0; i < y.length; i++) {
+      final xi = i < x.length ? x[i] : 0;
+      if (xi != y[i]) return xi > y[i];
+    }
+    return true;
+  }
+
+  static Future<String?> _containerPhpVersion(String stack) async {
+    final r = await run(
+        'docker', ['compose', 'exec', '-T', 'web', 'php', '-r', 'echo PHP_VERSION;'],
+        cwd: stack);
+    if (r.exitCode != 0) return null;
+    final v = (r.stdout as String).trim();
+    return RegExp(r'^\d+\.\d+\.\d+').hasMatch(v) ? v : null;
+  }
+
+  /// Çalışan web konteynerindeki PHP yamalı mı bakar; eskiyse yeni imajı çekip konteyneri yeniler.
+  /// (`compose up` yerelde eski imaj varsa onu kullanır, bu yüzden elle yenilemek gerekir.)
+  static Future<bool> ensurePatchedPhp(Course c, LabPackage p, Log log) async {
+    final stack = stackDir(c, p);
+    var v = await _containerPhpVersion(stack);
+    if (v == null) return true; // okunamadı: kurulumu engelleme
+    if (versionAtLeast(v, minPhpVersion)) {
+      log('✔ PHP $v (güvenlik yaması içeriyor).');
+      return true;
+    }
+    log('⚠ PHP $v güvenlik açığı içeriyor (en az $minPhpVersion gerekli). Yeni imaj indiriliyor...');
+    await stream('docker', ['compose', 'pull', 'web'],
+        cwd: stack, log: log, heartbeat: true);
+    await stream('docker', ['compose', 'up', '-d', 'web'],
+        cwd: stack, log: log, heartbeat: true);
+    v = await _containerPhpVersion(stack);
+    if (v != null && !versionAtLeast(v, minPhpVersion)) {
+      log('Hazır imaj henüz güncel değil, imaj bu bilgisayarda derleniyor (5-10 dk sürebilir)...');
+      await stream('docker', ['compose', 'build', '--pull', 'web'],
+          cwd: stack, log: log, heartbeat: true);
+      await stream('docker', ['compose', 'up', '-d', 'web'],
+          cwd: stack, log: log, heartbeat: true);
+      v = await _containerPhpVersion(stack);
+    }
+    final ok = v == null || versionAtLeast(v, minPhpVersion);
+    log(ok
+        ? '✔ PHP ${v ?? ''} güncellendi.'
+        : '✖ PHP $v güncellenemedi. İnterneti kontrol edip tekrar dene.');
+    return ok;
+  }
+
+  static Future<void> _tryStartDockerDesktop({bool restart = false}) async {
+    // `docker desktop start/restart` kapanmış ya da yarım kalmış motoru da toparlar.
+    try {
+      await Process.start('docker', ['desktop', restart ? 'restart' : 'start'],
+          runInShell: true,
+          environment: _env,
+          mode: ProcessStartMode.detached);
+    } catch (_) {}
+    if (restart || await _dockerDesktopProcessAlive()) return;
     final candidates = [
       r'C:\Program Files\Docker\Docker\Docker Desktop.exe',
       '${Platform.environment['LOCALAPPDATA']}\\Programs\\Docker\\Docker\\Docker Desktop.exe',
@@ -958,6 +1058,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
     }
     await stream('docker', ['compose', 'up', '-d'],
         cwd: stackDir(c, p), log: log);
+    if (p.buildContext != null) await ensurePatchedPhp(c, p, log);
   }
 
   static Future<void> stop(Course c, LabPackage p, Log log) async {

@@ -278,4 +278,14 @@ void main() {
     expect(readme, isNot(contains('{{')));
     await tmp.delete(recursive: true);
   });
+
+  test('PHP sürüm karşılaştırması: yamasız 8.3.x geri çevrilir', () {
+    expect(Engine.versionAtLeast('8.3.36', Engine.minPhpVersion), isTrue);
+    expect(Engine.versionAtLeast('8.3.40', Engine.minPhpVersion), isTrue);
+    expect(Engine.versionAtLeast('8.4.0', Engine.minPhpVersion), isTrue);
+    expect(Engine.versionAtLeast('8.3.35', Engine.minPhpVersion), isFalse);
+    expect(Engine.versionAtLeast('8.3.9', Engine.minPhpVersion), isFalse);
+    expect(Engine.versionAtLeast('8.2.99', Engine.minPhpVersion), isFalse);
+    expect(Engine.versionAtLeast('8.3.36-dev', Engine.minPhpVersion), isTrue);
+  });
 }
