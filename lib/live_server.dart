@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'platform.dart';
 
 /// Live Server benzeri, yalnızca bu bilgisayardan erişilebilen küçük bir önizleme sunucusu.
 /// Her proje klasörü için ayrı bir adres açar; klasördeki bir dosya kaydedilince
@@ -125,13 +126,13 @@ class LiveServer {
         await res.close();
         return;
       }
-      var target = parts.isEmpty ? root : '$root\\${parts.join('\\')}';
+      var target = parts.isEmpty ? root : '$root${Os.sep}${parts.join(Os.sep)}';
       if (await Directory(target).exists()) {
         if (!path.endsWith('/')) {
           res.redirect(Uri(path: '$path/'));
           return;
         }
-        target = '$target\\index.html';
+        target = '$target${Os.sep}index.html';
       }
       final file = File(target);
       if (!await file.exists()) {

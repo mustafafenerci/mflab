@@ -1,5 +1,5 @@
 param(
-  [string]$Version = "1.1.9",
+  [string]$Version = "1.2.0",
   [switch]$SkipFlutter = $false
 )
 

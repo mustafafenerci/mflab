@@ -6,13 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mflab/config.dart';
 import 'package:mflab/engine.dart';
 import 'package:mflab/models.dart';
+import 'package:mflab/platform.dart';
 import 'package:mflab/preflight.dart';
 import 'package:mflab/settings.dart';
 import 'package:mflab/ui/widgets.dart';
 import 'package:mflab/updater.dart';
 
 void main() {
-  test('PowerShell process encoding and argument passing', () async {
+  test('PowerShell process encoding and argument passing', skip: !Platform.isWindows, () async {
     final tmp = File('${Directory.systemTemp.path}\\test_exec.ps1');
     await tmp.writeAsString('Write-Output "FINISHED_OK"');
 
@@ -29,7 +30,7 @@ void main() {
     if (await tmp.exists()) await tmp.delete();
   });
 
-  test('Shortcut creation script executes without syntax error', () async {
+  test('Shortcut creation script executes without syntax error', skip: !Platform.isWindows, () async {
     final desktop = Platform.environment['USERPROFILE']! + r'\Desktop';
     final courseName = 'Web Tasarımı';
     final dir = '$desktop\\MF Lab - $courseName';
@@ -245,11 +246,11 @@ void main() {
     });
     test('kökün sahibi başka biriyse kullanıcıya ayrı klasör verilir', () {
       expect(AppConfig.resolveBaseDir(root: root, user: 'ayse', legacyData: false, owner: 'ali'),
-          '$root\\ayse');
+          '$root${Os.sep}ayse');
       expect(AppConfig.resolveBaseDir(root: root, user: 'ALI', legacyData: false, owner: 'ali'), root);
     });
     test('yeni kurulumda her kullanıcı kendi klasörünü kullanır', () {
-      expect(AppConfig.resolveBaseDir(root: root, user: 'ali', legacyData: false), '$root\\ali');
+      expect(AppConfig.resolveBaseDir(root: root, user: 'ali', legacyData: false), '$root${Os.sep}ali');
     });
   });
 
@@ -287,5 +288,47 @@ void main() {
     expect(Engine.versionAtLeast('8.3.9', Engine.minPhpVersion), isFalse);
     expect(Engine.versionAtLeast('8.2.99', Engine.minPhpVersion), isFalse);
     expect(Engine.versionAtLeast('8.3.36-dev', Engine.minPhpVersion), isTrue);
+  });
+
+  group('Platform katmanı', () {
+    test('kök klasör ve yol ayracı işletim sistemine uyar', () {
+      if (Platform.isWindows) {
+        expect(Os.rootDir, r'C:\MFLab');
+        expect(Os.sep, r'\');
+      } else {
+        expect(Os.rootDir, endsWith('/MFLab'));
+        expect(Os.sep, '/');
+        expect(Os.supportsTray, isFalse);
+        expect(Os.supportsSelfUpdate, isFalse);
+      }
+    });
+
+    test('macOS ve Linux ön kontrolünde Windows kontrolleri yoktur', () {
+      for (final os in ['macos', 'linux']) {
+        final r = Preflight.evaluate(
+            SystemFacts(
+                os: os,
+                ramGb: 16,
+                freeDiskGb: 50,
+                dockerInstalled: true,
+                dockerRunning: true,
+                dockerOs: 'linux',
+                network: {'ghcr.io': null}),
+            needsDocker: true);
+        final titles = r.map((c) => c.title);
+        expect(titles, isNot(contains('Windows sürümü')));
+        expect(titles, isNot(contains('WSL 2')));
+        expect(titles, isNot(contains('Sanallaştırma')));
+        expect(r.where((c) => c.level == CheckLevel.fail), isEmpty);
+      }
+    });
+
+    test('Docker kurulu olmayan macOS bilgisayar engellenir', () {
+      final r = Preflight.evaluate(
+          SystemFacts(os: 'macos', ramGb: 16, freeDiskGb: 50),
+          needsDocker: true);
+      expect(r.where((c) => c.level == CheckLevel.fail).map((c) => c.title),
+          contains('Docker'));
+    });
   });
 }

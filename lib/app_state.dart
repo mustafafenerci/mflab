@@ -5,6 +5,7 @@ import 'config.dart';
 
 import 'engine.dart';
 import 'models.dart';
+import 'platform.dart';
 import 'preflight.dart';
 import 'settings.dart';
 import 'updater.dart';
@@ -147,7 +148,7 @@ Ders: ${currentCourseName ?? '-'}
 
 Kurulum başarısız oldu veya hata verdi. Aşağıdaki kurulum günlüğüne bakıp:
 1. Sorunun ne olduğunu basit bir Türkçe ile anlat,
-2. Windows'ta adım adım nasıl çözeceğimi söyle,
+2. ${Os.name} işletim sisteminde adım adım nasıl çözeceğimi söyle,
 3. Çözümden sonra uygulamada tekrar "Kur"a basmam yeterli mi, belirt.
 
 --- Kurulum günlüğü ---

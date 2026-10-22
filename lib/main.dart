@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_state.dart';
 import 'config.dart';
 import 'engine.dart';
+import 'platform.dart';
 import 'tray.dart';
 import 'ui/about_page.dart';
 import 'ui/courses_page.dart';
@@ -114,6 +115,7 @@ class _ShellState extends State<Shell> {
                 ],
               ),
               actions: [
+                if (Os.supportsSelfUpdate)
                 HoverHint(
                   message:
                       'Yeni sürümü indirir, GitHub\'daki SHA-256 özetiyle doğrular ve kurar. '
@@ -124,7 +126,7 @@ class _ShellState extends State<Shell> {
                 ),
                 TextButton(
                     onPressed: () => Engine.openUrl(u.url),
-                    child: const Text('Sayfayı aç')),
+                    child: Text(Os.supportsSelfUpdate ? 'Sayfayı aç' : 'İndir')),
                 if (!u.mandatory && !state.updating)
                   TextButton(
                       onPressed: state.dismissUpdate,

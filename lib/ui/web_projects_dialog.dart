@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../platform.dart';
 
 import 'package:flutter/material.dart';
 
@@ -117,7 +118,7 @@ class _WebProjectsDialogState extends State<_WebProjectsDialog> {
     final live = LiveServer.running(p.path);
     final d = p.modified;
     String two(int n) => n.toString().padLeft(2, '0');
-    final hasPage = File('${p.path}\\index.html').existsSync() || p.entry.isNotEmpty;
+    final hasPage = File('${p.path}${Os.sep}index.html').existsSync() || p.entry.isNotEmpty;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: CircleAvatar(
@@ -153,7 +154,7 @@ class _WebProjectsDialogState extends State<_WebProjectsDialog> {
             ),
           ),
           HoverHint(
-            message: 'Proje klasörünü Dosya Gezgini\'nde açar (resim eklemek için).',
+            message: 'Proje klasörünü dosya yöneticisinde açar (resim eklemek için).',
             child: IconButton(
               icon: const Icon(Icons.folder_open_outlined),
               onPressed: () => Engine.openFolder(p.path),

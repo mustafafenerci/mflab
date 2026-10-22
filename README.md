@@ -21,7 +21,7 @@
 
 ## 💡 MF Lab Nedir?
 
-**MF Lab**, üniversite ve lise öğrencilerinin yazılım dersleri için gereken karmaşık ortamları (Apache, PHP 8.3, MariaDB, PostgreSQL, Composer, Git, Node.js, VS Code ve eklentileri) **tek bir tıkla, bilgisayarlarını kirletmeden ve neyin neden kurulduğunu öğrenerek** kurmalarını sağlayan modern bir Windows masaüstü uygulamasıdır.
+**MF Lab**, üniversite ve lise öğrencilerinin yazılım dersleri için gereken karmaşık ortamları (Apache, PHP 8.3, MariaDB, PostgreSQL, Composer, Git, Node.js, VS Code ve eklentileri) **tek bir tıkla, bilgisayarlarını kirletmeden ve neyin neden kurulduğunu öğrenerek** kurmalarını sağlayan modern bir masaüstü uygulamasıdır (**Windows, macOS ve Linux**).
 
 ### ✨ Temel Özellikler
 * 🐳 **Docker İle Temiz Sistem:** Web sunucusu ve veritabanları izole Docker konteynerlerinde çalışır. Bilgisayarınızda çakışma yaratmaz, sisteminizi yormaz.
@@ -44,7 +44,7 @@
 
 ---
 
-## 🎓 Desteklenen Dersler ve Servis Portları (v1.1.9)
+## 🎓 Desteklenen Dersler ve Servis Portları (v1.2.0)
 
 | Ders | Bileşenler | Portlar | Masaüstü Klasörü |
 | :--- | :--- | :--- | :--- |
@@ -58,11 +58,18 @@
 
 ### Yöntem 1: Kurulum Dosyası İle (Önerilen)
 1. **Setup Dosyasını İndirin:**  
-   [👉 **En Güncel Sürümü İndir (v1.1.9)**](https://github.com/mustafafenerci/mflab/releases/latest) — sayfadaki `MFLab-Setup-vX.Y.Z.exe` dosyasına tıklayın; dosya adındaki `vX.Y.Z` sürüm numarasıdır.
+   [👉 **En Güncel Sürümü İndir (v1.2.0)**](https://github.com/mustafafenerci/mflab/releases/latest) — sayfadaki `MFLab-Setup-vX.Y.Z.exe` dosyasına tıklayın; dosya adındaki `vX.Y.Z` sürüm numarasıdır.
 2. **Kurulumu Başlatın:**  
    `MFLab-Setup-vX.Y.Z.exe` dosyasını çalıştırın ve kurulum sihirbazını tamamlayın. Kurulum bitince MF Lab otomatik olarak açılır.
 3. **Dersinizi Seçin ve Kur'a Basın:**  
    Masaüstündeki **MF Lab** kısayolundan uygulamayı açın, aldığınız dersi seçip **"Kur"** butonuna basın.
+
+### Yöntem 1b: macOS ve Linux
+
+* **macOS:** [Son sürümden](https://github.com/mustafafenerci/mflab/releases/latest) `MFLab-vX.Y.Z-macos.dmg` dosyasını indirin, açın ve **MF Lab**'ı Uygulamalar klasörüne sürükleyin. Önce [Docker Desktop](https://www.docker.com/products/docker-desktop/) kurulu olmalıdır.
+* **Linux (Debian/Ubuntu/Mint):** `sudo apt install ./MFLab-vX.Y.Z-linux-amd64.deb` (Docker Engine ve `docker compose` gerekir: `sudo apt install docker.io docker-compose-v2 && sudo usermod -aG docker $USER`, sonra oturumu kapatıp açın). Diğer dağıtımlar için `MFLab-vX.Y.Z-linux-x64.tar.gz` arşivini açıp `mflab` dosyasını çalıştırın.
+* Çalışma klasörü `~/MFLab` altındadır. Windows'a özgü özellikler (saatin yanında tepsi simgesi, tek tıkla uygulama içi güncelleme) macOS ve Linux'ta yoktur; yeni sürüm bildirimi indirme sayfasını açar.
+* Geliştiriciler için paketleme ve imzalama adımları: [`docs/MACOS_LINUX.md`](docs/MACOS_LINUX.md).
 
 ### Yöntem 2: Tek Komutla PowerShell Kurulumu (Laboratuvarlar & Hızlı Kurulum)
 Windows PowerShell'i açıp şu komutu yapıştırmanız yeterlidir:

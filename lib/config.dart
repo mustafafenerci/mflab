@@ -1,10 +1,11 @@
 import 'dart:io';
+import 'platform.dart';
 
 /// Merkezi yapılandırma. Fork edenler yalnızca burayı değiştirerek
 /// kendi GitHub deposunu ve imajını gösterebilir.
 class AppConfig {
   static const appName = 'MF Lab';
-  static const appVersion = '1.1.9';
+  static const appVersion = '1.2.0';
   static const author = 'Mustafa Fenerci';
   static const githubUser = 'mustafafenerci';
   static const githubRepo = 'mflab';
@@ -16,8 +17,8 @@ class AppConfig {
   static const versionJsonUrl =
       'https://raw.githubusercontent.com/$githubUser/$githubRepo/main/version.json';
 
-  /// Tüm MF Lab dosyalarının ortak kökü.
-  static const rootDir = r'C:\MFLab';
+  /// Tüm MF Lab dosyalarının ortak kökü (Windows: `C:\MFLab`, macOS/Linux: `~/MFLab`).
+  static String get rootDir => Os.rootDir;
 
   /// Bu Windows kullanıcısının çalışma dosyaları ve konteyner tanımları.
   /// Laboratuvarda aynı bilgisayarı kullanan öğrenciler birbirinin projesini görmesin diye
@@ -25,10 +26,9 @@ class AppConfig {
   static String baseDir = rootDir;
 
   /// Kaldırma programının (Inno Setup) çalışma klasörünü bulabilmesi için yazılan dosya.
-  static String get baseDirPointerFile =>
-      '${Platform.environment['APPDATA'] ?? rootDir}\\MFLab\\basedir.txt';
+  static String get baseDirPointerFile => '${Os.configDir}${Os.sep}basedir.txt';
 
-  static const _ownerFile = '$rootDir\\.owner';
+  static String get _ownerFile => '$rootDir${Os.sep}.owner';
 
   /// Windows kullanıcı adını klasör adı olarak güvenli hale getirir (Türkçe harfler sadeleşir).
   static String safeUserName(String name) {
@@ -56,18 +56,18 @@ class AppConfig {
     String? owner,
   }) {
     if (owner != null && owner.isNotEmpty) {
-      return owner.toLowerCase() == user.toLowerCase() ? root : '$root\\$user';
+      return owner.toLowerCase() == user.toLowerCase() ? root : '$root${Os.sep}$user';
     }
-    return legacyData ? root : '$root\\$user';
+    return legacyData ? root : '$root${Os.sep}$user';
   }
 
   static bool _hasLegacyData() {
     final root = Directory(rootDir);
     if (!root.existsSync()) return false;
-    if (File('$rootDir\\settings.json').existsSync()) return true;
+    if (File('$rootDir${Os.sep}settings.json').existsSync()) return true;
     try {
       for (final e in root.listSync(followLinks: false)) {
-        if (e is Directory && Directory('${e.path}\\.stack').existsSync()) {
+        if (e is Directory && Directory('${e.path}${Os.sep}.stack').existsSync()) {
           return true;
         }
       }
@@ -76,7 +76,18 @@ class AppConfig {
   }
 
   static Future<void> init() async {
-    final user = safeUserName(Platform.environment['USERNAME'] ?? 'ogrenci');
+    if (!Os.isWindows) {
+      // macOS / Linux: klasör zaten kullanıcının ev dizininde, ek yalıtıma gerek yok.
+      baseDir = rootDir;
+      try {
+        await Directory(baseDir).create(recursive: true);
+        final p = File(baseDirPointerFile);
+        await p.parent.create(recursive: true);
+        await p.writeAsString(baseDir);
+      } catch (_) {}
+      return;
+    }
+    final user = safeUserName(Os.userName);
     String? owner;
     try {
       final f = File(_ownerFile);
@@ -93,7 +104,7 @@ class AppConfig {
         await dir.create(recursive: true);
         // Klasörü yalnızca bu kullanıcı (ve yöneticiler/sistem) görebilsin.
         final who =
-            '${Platform.environment['USERDOMAIN'] ?? '.'}\\${Platform.environment['USERNAME'] ?? ''}';
+            '${Platform.environment['USERDOMAIN'] ?? '.'}${Os.sep}${Platform.environment['USERNAME'] ?? ''}';
         await Process.run('icacls', [
           baseDir,
           '/inheritance:r',

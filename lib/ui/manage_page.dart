@@ -455,7 +455,7 @@ class _ServiceCard extends StatelessWidget {
                   icon: Icons.folder_open,
                   label: 'Klasör',
                   hint:
-                      'Kodlarını koyduğun çalışma klasörünü Dosya Gezgini\'nde açar.',
+                      'Kodlarını koyduğun çalışma klasörünü dosya yöneticisinde açar.',
                   onPressed: () =>
                       Engine.openFolder(Engine.workspaceDir(e.course)),
                 ),
@@ -1175,7 +1175,7 @@ class _WebCourseCard extends StatelessWidget {
                   ),
                 ),
                 HoverHint(
-                  message: 'Proje klasörünü Dosya Gezgini\'nde açar.',
+                  message: 'Proje klasörünü dosya yöneticisinde açar.',
                   child: OutlinedButton.icon(
                     onPressed: () => Engine.openFolder(ws),
                     icon: const Icon(Icons.folder_open, size: 16),

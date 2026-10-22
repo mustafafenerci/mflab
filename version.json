@@ -1,6 +1,6 @@
 {
-  "version": "1.1.9",
+  "version": "1.2.0",
   "url": "https://github.com/mustafafenerci/mflab/releases/latest",
-  "notes": "PHP güvenlik güncellemesi: uzaktan kod çalıştırmaya izin veren açık PHP 8.3.36 ile kapatıldı; eski imaj otomatik yenilenir. Docker Desktop hiç açılmamışsa artık kendisi açılıp hazır olana kadar bekler.",
+  "notes": "MF Lab artık macOS ve Linux için de var (indirme sayfasında .dmg ve .deb). Windows sürümü aynı kalır; Docker ilk açılışı ve PHP güvenlik güncellemesi iyileştirildi.",
   "mandatory": false
 }

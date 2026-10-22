@@ -79,3 +79,84 @@ jobs:
             dist/MFLab-Setup-v${{ steps.ver.outputs.version }}.exe
             dist/MFLab-Setup-v${{ steps.ver.outputs.version }}.exe.sha256
           generate_release_notes: true
+
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test --exclude-tags network
+      - run: flutter build linux --release
+      - name: Determine version
+        id: ver
+        run: |
+          REF="${{ github.ref_name }}"
+          V="${REF#v}"
+          if [ "${{ github.ref_type }}" != "tag" ]; then
+            V="${{ inputs.tag }}"; V="${V#v}"
+          fi
+          if [ -z "$V" ]; then V="$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - run: bash scripts/package_linux.sh "${{ steps.ver.outputs.version }}" dist
+      - name: Upload to release
+        run: |
+          TAG="v${{ steps.ver.outputs.version }}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" dist/MFLab-v${{ steps.ver.outputs.version }}-linux-* --clobber
+
+  macos:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test --exclude-tags network
+      - run: flutter build macos --release
+      - name: Import signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        run: |
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          KC="$RUNNER_TEMP/build.keychain"
+          security create-keychain -p ci "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p ci "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci "$KC"
+          security list-keychains -d user -s "$KC" login.keychain
+      - name: Determine version
+        id: ver
+        run: |
+          REF="${{ github.ref_name }}"
+          V="${REF#v}"
+          if [ "${{ github.ref_type }}" != "tag" ]; then
+            V="${{ inputs.tag }}"; V="${V#v}"
+          fi
+          if [ -z "$V" ]; then V="$(grep -m1 '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - run: bash scripts/package_macos.sh "${{ steps.ver.outputs.version }}" dist
+      - name: Upload to release
+        run: |
+          TAG="v${{ steps.ver.outputs.version }}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" dist/MFLab-v${{ steps.ver.outputs.version }}-macos.dmg dist/MFLab-v${{ steps.ver.outputs.version }}-macos.dmg.sha256 --clobber

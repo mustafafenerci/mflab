@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'platform.dart';
 
 import 'package:flutter/material.dart';
 
@@ -25,7 +26,7 @@ class AppSettings {
   /// Windows açılınca MF Lab saatin yanında (tepside) başlasın mı?
   bool startWithWindows;
 
-  static String get filePath => '${AppConfig.baseDir}\\settings.json';
+  static String get filePath => '${AppConfig.baseDir}${Os.sep}settings.json';
 
   static Future<AppSettings> load() async {
     try {

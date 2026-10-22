@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'platform.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
@@ -38,7 +39,7 @@ class Updater {
   /// Kurulum dosyasını geçici klasöre indirir. [onProgress] 0..1 arası ilerleme verir.
   static Future<File> download(String version,
       {void Function(double progress)? onProgress}) async {
-    final target = File('${Directory.systemTemp.path}\\${setupName(version)}');
+    final target = File('${Directory.systemTemp.path}${Os.sep}${setupName(version)}');
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
       final req = await client.getUrl(Uri.parse(downloadUrl(version)));

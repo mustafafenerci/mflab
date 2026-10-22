@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'platform.dart';
 
 import 'config.dart';
 import 'engine.dart';
@@ -34,6 +35,7 @@ class SystemFacts {
     this.dockerRunning = false,
     this.dockerOs,
     this.dockerUsersMissing = false,
+    this.os = 'windows',
     Map<String, String?>? network,
   }) : network = network ?? {};
 
@@ -51,6 +53,9 @@ class SystemFacts {
 
   /// docker-users grubu var ama bu oturum o grupta değil (oturumu kapatıp açmak gerekir).
   final bool dockerUsersMissing;
+
+  /// 'windows', 'macos' veya 'linux'. Windows'a özel kontroller (WSL, BIOS, yeniden başlatma) yalnızca orada yapılır.
+  final String os;
 
   /// `docker version` sunucu işletim sistemi: 'linux' veya 'windows'.
   final String? dockerOs;
@@ -89,8 +94,37 @@ if ($LASTEXITCODE -eq 0) { $o.dockerUsers = @((whoami /groups) -match 'docker-us
 $o | ConvertTo-Json -Compress
 ''';
 
+  /// macOS / Linux: RAM ve boş disk (PowerShell yok).
+  static Future<Map<String, dynamic>> _posixJson() async {
+    final o = <String, dynamic>{};
+    try {
+      if (Os.isMac) {
+        final r = await Engine.run('sysctl', ['-n', 'hw.memsize']);
+        final b = double.tryParse((r.stdout as String).trim());
+        if (b != null) o['ramGb'] = (b / (1 << 30) * 10).round() / 10;
+      } else {
+        final m = RegExp(r'MemTotal:\s+(\d+)\s+kB')
+            .firstMatch(await File('/proc/meminfo').readAsString());
+        if (m != null) {
+          o['ramGb'] = (int.parse(m.group(1)!) / (1 << 20) * 10).round() / 10;
+        }
+      }
+    } catch (_) {}
+    try {
+      final r = await Engine.run('df', ['-k', Os.home]);
+      final lines = (r.stdout as String).trim().split('\n');
+      if (lines.length >= 2) {
+        final cols = lines.last.trim().split(RegExp(r'\s+'));
+        final kb = int.tryParse(cols.length > 3 ? cols[3] : '');
+        if (kb != null) o['freeGb'] = (kb / (1 << 20) * 10).round() / 10;
+      }
+    } catch (_) {}
+    return o;
+  }
+
   static Future<Map<String, dynamic>> _systemJson() async {
-    final f = File('${Directory.systemTemp.path}\\mflab_facts.ps1');
+    if (!Os.isWindows) return {};
+    final f = File('${Directory.systemTemp.path}${Os.sep}mflab_facts.ps1');
     try {
       await f.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(_factsScript)]);
       final r = await Engine.run('powershell',
@@ -120,7 +154,7 @@ $o | ConvertTo-Json -Compress
     try {
       final dir = Directory(AppConfig.baseDir);
       await dir.create(recursive: true);
-      final probe = File('${dir.path}\\.yazma_testi');
+      final probe = File('${dir.path}${Os.sep}.yazma_testi');
       await probe.writeAsString('ok');
       await probe.delete();
       return true;
@@ -136,9 +170,9 @@ $o | ConvertTo-Json -Compress
     final direct = await _reachDart(host);
     if (direct == null) return null;
     try {
-      final r = await Process.run('curl.exe', [
-        '-s', '-o', 'NUL', '-w', '%{http_code}', '--max-time', '8',
-        'https://$host/v2/',
+      final r = await Process.run(Os.isWindows ? 'curl.exe' : 'curl', [
+        '-s', '-o', Os.isWindows ? 'NUL' : '/dev/null', '-w', '%{http_code}',
+        '--max-time', '8', 'https://$host/v2/',
       ]);
       final status = (r.stdout as String).trim();
       if (status.isNotEmpty && status != '000') return null;
@@ -173,7 +207,7 @@ $o | ConvertTo-Json -Compress
 
   static Future<SystemFacts> gather({required bool needsDocker}) async {
     await Engine.refreshPath();
-    final sys = await _systemJson();
+    final sys = Os.isWindows ? await _systemJson() : await _posixJson();
     final writable = await _baseDirWritable();
     var dInst = false, dRun = false;
     String? dOs;
@@ -187,7 +221,7 @@ $o | ConvertTo-Json -Compress
             'docker', ['version', '--format', '{{.Server.Os}}']);
         dOs = (r.stdout as String).trim().toLowerCase();
       }
-      wsl = await Engine.commandOk('wsl --status');
+      if (Os.isWindows) wsl = await Engine.commandOk('wsl --status');
       final results = await Future.wait(registries.keys.map(_reach));
       var i = 0;
       for (final h in registries.keys) {
@@ -209,6 +243,7 @@ $o | ConvertTo-Json -Compress
       dockerRunning: dRun,
       dockerOs: dOs,
       dockerUsersMissing: sys['dockerUsers'] == false,
+      os: Os.isWindows ? 'windows' : (Os.isMac ? 'macos' : 'linux'),
       network: net,
     );
   }
@@ -245,8 +280,11 @@ $o | ConvertTo-Json -Compress
 
     if (!needsDocker) return r;
 
+    final win = f.os == 'windows';
     final build = f.windowsBuild;
-    if (build == null) {
+    if (!win) {
+      // macOS / Linux: Windows sürümü kontrolü yok.
+    } else if (build == null) {
       r.add(const CheckResult(CheckLevel.warn, 'Windows sürümü', 'Sürüm öğrenilemedi.'));
     } else if (build < 19044) {
       r.add(CheckResult(CheckLevel.fail, 'Windows sürümü',
@@ -275,7 +313,9 @@ $o | ConvertTo-Json -Compress
       r.add(CheckResult(CheckLevel.ok, 'Bellek (RAM)', '${ram.toStringAsFixed(1)} GB.'));
     }
 
-    if (f.hypervisor == true || f.virtualization == true || f.dockerRunning) {
+    if (!win) {
+      // Sanallaştırmayı Docker Desktop (macOS) ya da çekirdek (Linux) kendisi yönetir.
+    } else if (f.hypervisor == true || f.virtualization == true || f.dockerRunning) {
       r.add(const CheckResult(CheckLevel.ok, 'Sanallaştırma', 'Açık.'));
     } else if (f.virtualization == false) {
       r.add(const CheckResult(CheckLevel.fail, 'Sanallaştırma',
@@ -287,7 +327,9 @@ $o | ConvertTo-Json -Compress
       r.add(const CheckResult(CheckLevel.warn, 'Sanallaştırma', 'Durumu öğrenilemedi.'));
     }
 
-    if (f.wslOk == false) {
+    if (!win) {
+      // WSL yalnızca Windows'ta vardır.
+    } else if (f.wslOk == false) {
       r.add(const CheckResult(CheckLevel.warn, 'WSL 2',
           'Windows Linux Alt Sistemi (WSL) hazır değil. Docker Desktop buna ihtiyaç duyar.',
           fix: 'Docker Desktop kurulumu WSL\'i genelde kendisi kurar; kurulumdan sonra bilgisayarı '
@@ -297,7 +339,7 @@ $o | ConvertTo-Json -Compress
       r.add(const CheckResult(CheckLevel.ok, 'WSL 2', 'Hazır.'));
     }
 
-    if (f.rebootPending) {
+    if (win && f.rebootPending) {
       r.add(CheckResult(
           f.dockerInstalled && !f.dockerRunning ? CheckLevel.fail : CheckLevel.warn,
           'Yeniden başlatma',
@@ -305,7 +347,26 @@ $o | ConvertTo-Json -Compress
           fix: 'Açık dosyalarını kaydet ve bilgisayarı yeniden başlat. Sonra MF Lab\'ı açıp tekrar "Kur"a bas.'));
     }
 
-    if (!f.dockerInstalled) {
+    if (!win && !f.dockerInstalled) {
+      r.add(CheckResult(CheckLevel.fail, 'Docker',
+          f.os == 'macos'
+              ? 'Docker Desktop kurulu değil.'
+              : 'Docker kurulu değil.',
+          fix: f.os == 'macos'
+              ? 'https://www.docker.com/products/docker-desktop/ adresinden Mac\'in işlemcisine (Apple Silicon ya da Intel) uygun Docker Desktop\'ı indirip Uygulamalar klasörüne sürükle, bir kez aç ve lisansı kabul et.'
+              : 'Docker Engine\'i kur: https://docs.docker.com/engine/install/ (Ubuntu/Debian: "sudo apt install docker.io docker-compose-v2"). '
+                  'Sonra: sudo systemctl enable --now docker  ve  sudo usermod -aG docker \$USER  (oturumu kapatıp aç).'));
+    } else if (!win && !f.dockerRunning) {
+      r.add(CheckResult(CheckLevel.warn, 'Docker',
+          f.os == 'macos'
+              ? 'Kurulu ama çalışmıyor. MF Lab Docker Desktop\'ı açmayı deneyecek.'
+              : 'Kurulu ama motor çalışmıyor ya da bu kullanıcının izni yok.',
+          fix: f.os == 'macos'
+              ? 'Docker Desktop açılınca lisans sözleşmesini kabul et; üst çubukta balina simgesi sabitlenince hazırdır.'
+              : 'sudo systemctl enable --now docker  ve  sudo usermod -aG docker \$USER  (sonra oturumu kapatıp aç).'));
+    } else if (!win) {
+      r.add(const CheckResult(CheckLevel.ok, 'Docker', 'Çalışıyor.'));
+    } else if (!f.dockerInstalled) {
       r.add(CheckResult(
           f.isAdmin == false ? CheckLevel.fail : CheckLevel.warn,
           'Docker Desktop',
@@ -362,7 +423,9 @@ $o | ConvertTo-Json -Compress
     var facts = await gather(needsDocker: needsDocker);
 
     // Docker yanlış moddaysa otomatik olarak Linux moduna geçirmeyi dene.
-    if (facts.dockerOs == 'windows' && await File(_dockerCli).exists()) {
+    if (Os.isWindows &&
+        facts.dockerOs == 'windows' &&
+        await File(_dockerCli).exists()) {
       log('Docker "Windows konteynerleri" modunda, Linux moduna geçiriliyor...');
       // Yolda boşluk olduğu için kabuk (cmd) kullanmadan doğrudan çalıştır.
       await Process.run(_dockerCli, ['-SwitchLinuxEngine']);

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=MF Lab
+GenericName=Course lab environment
+Comment=One-click Docker lab environments for software courses
+Exec=mflab
+Icon=mflab
+Terminal=false
+Categories=Education;Development;
+StartupWMClass=com.mflab.mflab

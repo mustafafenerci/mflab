@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../config.dart';
 import '../engine.dart';
+import '../platform.dart';
 import '../settings.dart';
 import 'widgets.dart';
 
@@ -55,6 +56,7 @@ class AboutPage extends StatelessWidget {
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
                 const SizedBox(height: 6),
+                if (Os.supportsTray)
                 HoverHint(
                   message:
                       'Açıksa bilgisayar açıldığında MF Lab pencere açmadan saatin yanında başlar; '
@@ -96,7 +98,7 @@ class AboutPage extends StatelessWidget {
         _section(context, 'Nasıl çalışır?', [
           const Text('• Dersini seç, kurulacak yazılımları ve nedenlerini oku.\n'
               '• "Kur"a bas; Docker ve araçlar kontrol edilir, eksikler için indirme sayfası açılır.\n'
-              '• Çalışma klasörün (htdocs gibi) Windows\'ta durur, konteynere bağlıdır. Dosyaları VS Code\'da düzenleyip tarayıcıda anında görürsün.\n'
+              '• Çalışma klasörün (htdocs gibi) bilgisayarında durur, konteynere bağlıdır. Dosyaları VS Code\'da düzenleyip tarayıcıda anında görürsün.\n'
               '• Masaüstüne kısayollar eklenir. Servisleri "Yönetim" sayfasından başlatıp durdurursun.\n'
               '• Bir hata olursa nedeni ve resmi kaynak bağlantısı gösterilir.'),
         ]),

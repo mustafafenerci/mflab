@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'platform.dart';
 
 import 'package:flutter/services.dart';
 
@@ -17,11 +18,11 @@ class InstallResult {
 }
 
 class Engine {
-  static String courseDir(Course c) => '${AppConfig.baseDir}\\${c.id}';
+  static String courseDir(Course c) => '${AppConfig.baseDir}${Os.sep}${c.id}';
   static String workspaceDir(Course c) =>
-      '${courseDir(c)}\\${c.workspaceName}';
+      '${courseDir(c)}${Os.sep}${c.workspaceName}';
   static String stackDir(Course c, LabPackage p) =>
-      '${courseDir(c)}\\.stack\\${p.id}';
+      '${courseDir(c)}${Os.sep}.stack${Os.sep}${p.id}';
 
   // ---------------------------------------------------------------- process
 
@@ -44,55 +45,73 @@ class Engine {
       if (seen.add(v.toLowerCase())) parts.add(v);
     }
 
-    for (final x in (Platform.environment['PATH'] ?? '').split(';')) {
+    final pathSep = Os.isWindows ? ';' : ':';
+    for (final x in (Platform.environment['PATH'] ?? '').split(pathSep)) {
       add(x);
     }
-    try {
-      final r = await Process.run(
-          'powershell',
-          [
-            '-NoProfile',
-            '-Command',
-            "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + "
-                "[Environment]::GetEnvironmentVariable('Path','User')"
-          ],
-          stdoutEncoding: _utf8);
-      for (final x in (r.stdout as String).split(';')) {
-        add(x);
-      }
-    } catch (_) {}
+    if (Os.isWindows) {
+      try {
+        final r = await Process.run(
+            'powershell',
+            [
+              '-NoProfile',
+              '-Command',
+              "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + "
+                  "[Environment]::GetEnvironmentVariable('Path','User')"
+            ],
+            stdoutEncoding: _utf8);
+        for (final x in (r.stdout as String).split(';')) {
+          add(x);
+        }
+      } catch (_) {}
+    }
     // PATH'e eklenmemiş olsa bile bilinen kurulum yerlerine bak.
+    // (macOS'ta Dock/Finder'dan açılan uygulamanın PATH'i neredeyse boştur.)
     for (final d in _knownToolDirs()) {
       if (Directory(d).existsSync()) add(d);
     }
-    _env = {'PATH': parts.join(';')};
+    _env = {'PATH': parts.join(pathSep)};
+  }
+
+  /// POSIX'te komutu, güncellenmiş PATH'te arayıp tam yolunu döner (Windows'ta olduğu gibi bırakır).
+  static String _exe(String cmd) {
+    if (Os.isWindows || cmd.contains('/')) return cmd;
+    final path = _env?['PATH'] ?? Platform.environment['PATH'] ?? '';
+    for (final d in path.split(':')) {
+      if (d.isEmpty) continue;
+      final f = File('$d/$cmd');
+      if (f.existsSync()) return f.path;
+    }
+    return cmd;
   }
 
   static List<String> _knownToolDirs() {
+    if (!Os.isWindows) return Os.extraToolDirs;
     final local = Platform.environment['LOCALAPPDATA'] ?? '';
     final pf = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
     final pf86 =
         Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)';
     return [
-      '$local\\Programs\\Microsoft VS Code\\bin',
-      '$pf\\Microsoft VS Code\\bin',
-      '$pf86\\Microsoft VS Code\\bin',
-      '$pf\\Git\\cmd',
-      '$pf86\\Git\\cmd',
-      '$pf\\Docker\\Docker\\resources\\bin',
+      '$local${Os.sep}Programs${Os.sep}Microsoft VS Code${Os.sep}bin',
+      '$pf${Os.sep}Microsoft VS Code${Os.sep}bin',
+      '$pf86${Os.sep}Microsoft VS Code${Os.sep}bin',
+      '$pf${Os.sep}Git${Os.sep}cmd',
+      '$pf86${Os.sep}Git${Os.sep}cmd',
+      '$pf${Os.sep}Docker${Os.sep}Docker${Os.sep}resources${Os.sep}bin',
     ];
   }
 
   /// VS Code'un çalıştırılabilir dosyası (kurulu değilse null).
   static String? findVsCodeExe() {
+    if (!Os.isWindows) return null;
     final local = Platform.environment['LOCALAPPDATA'] ?? '';
     final pf = Platform.environment['ProgramFiles'] ?? r'C:\Program Files';
     final pf86 =
         Platform.environment['ProgramFiles(x86)'] ?? r'C:\Program Files (x86)';
     for (final c in [
-      '$local\\Programs\\Microsoft VS Code\\Code.exe',
-      '$pf\\Microsoft VS Code\\Code.exe',
-      '$pf86\\Microsoft VS Code\\Code.exe',
+      '$local${Os.sep}Programs${Os.sep}Microsoft VS Code${Os.sep}Code.exe',
+      '$pf${Os.sep}Microsoft VS Code${Os.sep}Code.exe',
+      '$pf86${Os.sep}Microsoft VS Code${Os.sep}Code.exe',
     ]) {
       if (File(c).existsSync()) return c;
     }
@@ -101,9 +120,9 @@ class Engine {
 
   static Future<ProcessResult> run(String cmd, List<String> args,
       {String? cwd}) {
-    return Process.run(cmd, args,
+    return Process.run(_exe(cmd), args,
         workingDirectory: cwd,
-        runInShell: true,
+        runInShell: Os.isWindows,
         environment: _env,
         stdoutEncoding: _utf8,
         stderrEncoding: _utf8);
@@ -126,8 +145,8 @@ class Engine {
                 'İnternet hızına göre birkaç dakika sürebilir, pencereyi kapatma.');
           })
         : null;
-    final proc = await Process.start(cmd, args,
-        workingDirectory: cwd, runInShell: true, environment: _env);
+    final proc = await Process.start(_exe(cmd), args,
+        workingDirectory: cwd, runInShell: Os.isWindows, environment: _env);
     final done = <Future<void>>[];
     for (final s in [proc.stdout, proc.stderr]) {
       final c = Completer<void>();
@@ -158,19 +177,143 @@ class Engine {
   static Future<bool> dockerInstalled() => commandOk('docker --version');
   static Future<bool> dockerRunning() => commandOk('docker info');
 
+  /// Dosya yöneticisi/tarayıcı gibi bir masaüstü programını açar ve beklemez.
+  static Future<void> _launch(String cmd, List<String> args) async {
+    try {
+      await Process.start(_exe(cmd), args,
+          runInShell: Os.isWindows,
+          environment: _env,
+          mode: ProcessStartMode.detached);
+    } catch (_) {}
+  }
+
   static Future<void> openUrl(String url) async {
-    await run('cmd', ['/c', 'start', '', url]);
+    if (Os.isWindows) {
+      await run('cmd', ['/c', 'start', '', url]);
+    } else {
+      await _launch(Os.isMac ? 'open' : 'xdg-open', [url]);
+    }
   }
 
   static Future<void> openFolder(String path) async {
     await Directory(path).create(recursive: true);
-    await Process.start('explorer', [path], runInShell: true);
+    if (Os.isWindows) {
+      await Process.start('explorer', [path], runInShell: true);
+    } else {
+      await _launch(Os.isMac ? 'open' : 'xdg-open', [path]);
+    }
+  }
+
+  /// Dosya yöneticisinde dosyayı seçili gösterir.
+  static Future<void> revealFile(String path) async {
+    try {
+      if (Os.isWindows) {
+        await Process.start('explorer.exe', ['/select,', path], runInShell: true);
+      } else if (Os.isMac) {
+        await _launch('open', ['-R', path]);
+      } else {
+        await _launch('xdg-open', [File(path).parent.path]);
+      }
+    } catch (_) {}
   }
 
   static Future<void> openInVsCode(String path) async {
     await Directory(path).create(recursive: true);
     await refreshPath();
+    if (Os.isMac && !await commandOk('code --version')) {
+      await _launch('open', ['-a', 'Visual Studio Code', path]);
+      return;
+    }
     await run('code', [path]);
+  }
+
+  /// Masaüstü klasörü (Windows'ta OneDrive'a taşınmış olabilir, bu yüzden Windows'a sorulur).
+  static Future<String> desktopDir() async {
+    if (Os.isWindows) {
+      final r = await run('powershell',
+          ['-NoProfile', '-Command', r"[Environment]::GetFolderPath('Desktop')"]);
+      final d = (r.stdout as String).trim();
+      if (d.isNotEmpty) return d;
+      return '${Os.home}\\Desktop';
+    }
+    if (Os.isLinux) {
+      try {
+        final r = await run('xdg-user-dir', ['DESKTOP']);
+        final d = (r.stdout as String).trim();
+        if (r.exitCode == 0 && d.isNotEmpty && Directory(d).existsSync()) return d;
+      } catch (_) {}
+    }
+    final d = Directory('${Os.home}/Desktop');
+    if (!d.existsSync()) {
+      try {
+        d.createSync(recursive: true);
+      } catch (_) {
+        return Os.home;
+      }
+    }
+    return d.path;
+  }
+
+  /// `docker ...` çıktısını (ör. veritabanı dökümü) bayt bayt dosyaya yazar.
+  static Future<bool> dockerToFile(List<String> args, String cwd, File out) async {
+    try {
+      final proc = await Process.start(_exe('docker'), args,
+          workingDirectory: cwd, runInShell: Os.isWindows, environment: _env);
+      final sink = out.openWrite();
+      final done = proc.stdout.pipe(sink);
+      final err = proc.stderr.drain<void>();
+      final code = await proc.exitCode;
+      await done;
+      await err;
+      return code == 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Dosyayı `docker ...` komutunun girdisine verir (ör. .sql içe aktarma).
+  static Future<(int, String)> dockerFromFile(
+      List<String> args, String cwd, File input) async {
+    try {
+      final proc = await Process.start(_exe('docker'), args,
+          workingDirectory: cwd, runInShell: Os.isWindows, environment: _env);
+      final errBuf = StringBuffer();
+      final errDone = proc.stderr.transform(_utf8.decoder).forEach(errBuf.write);
+      final outDone = proc.stdout.drain<void>();
+      await input.openRead().pipe(proc.stdin);
+      final code = await proc.exitCode;
+      await errDone;
+      await outDone;
+      return (code, errBuf.toString());
+    } catch (e) {
+      return (1, '$e');
+    }
+  }
+
+  /// [src] klasörünün içeriğini [dst]'ye kopyalar; [exclude] adlı ilk seviye öğeleri atlar.
+  static Future<void> copyDir(Directory src, Directory dst,
+      {Set<String> exclude = const {}}) async {
+    await dst.create(recursive: true);
+    await for (final e in src.list(followLinks: false)) {
+      final name = e.uri.pathSegments.where((s) => s.isNotEmpty).last;
+      if (exclude.contains(name)) continue;
+      if (e is Directory) {
+        await copyDir(e, Directory('${dst.path}${Os.sep}$name'));
+      } else if (e is File) {
+        await e.copy('${dst.path}${Os.sep}$name');
+      }
+    }
+  }
+
+  /// macOS/Linux'ta [stagingDir] içeriğini `zip` komutuyla [outZip] dosyasına arşivler.
+  static Future<bool> zipDirPosix(String stagingDir, String outZip) async {
+    try {
+      if (File(outZip).existsSync()) File(outZip).deleteSync();
+      final r = await run('zip', ['-r', '-q', outZip, '.'], cwd: stagingDir);
+      return r.exitCode == 0 && File(outZip).existsSync();
+    } catch (_) {
+      return false;
+    }
   }
 
 
@@ -181,6 +324,7 @@ class Engine {
 
   /// Windows açılınca MF Lab'ı saatin yanında (pencere açmadan) başlatır ya da bunu kapatır.
   static Future<bool> setAutostart(bool enabled) async {
+    if (!Os.isWindows) return false;
     try {
       final exe = Platform.resolvedExecutable;
       final r = enabled
@@ -269,14 +413,14 @@ class Engine {
     await Directory(stack).create(recursive: true);
     await Directory(ws).create(recursive: true);
 
-    await File('$stack\\compose.yml')
+    await File('$stack${Os.sep}compose.yml')
         .writeAsString(await rootBundle.loadString(p.compose!));
-    await File('$stack\\.env')
+    await File('$stack${Os.sep}.env')
         .writeAsString('WORKSPACE=${ws.replaceAll('\\', '/')}\n');
     if (p.buildContext != null) {
-      final dir = Directory('$stack\\php-web');
+      final dir = Directory('$stack${Os.sep}php-web');
       await dir.create(recursive: true);
-      await File('${dir.path}\\Dockerfile')
+      await File('${dir.path}${Os.sep}Dockerfile')
           .writeAsString(await rootBundle.loadString(p.buildContext!));
     }
     await _seedWorkspace(course, ws);
@@ -319,7 +463,7 @@ class Engine {
     await _savePortMap(course.id, p.id, portMap);
     if (course.workspaceName == 'htdocs') {
       try {
-        await File('$ws\\.mflab-ports.json').writeAsString(
+        await File('$ws${Os.sep}.mflab-ports.json').writeAsString(
             jsonEncode(portMap.map((k, v) => MapEntry('$k', v))));
       } catch (_) {}
     }
@@ -328,7 +472,7 @@ class Engine {
       portMap.forEach((from, to) {
         text = text.replaceAll('"$from:', '"$to:');
       });
-      await File('$stack\\compose.yml').writeAsString(text);
+      await File('$stack${Os.sep}compose.yml').writeAsString(text);
     }
 
     log('Konteynerler indiriliyor ve başlatılıyor (ilk seferde birkaç dakika sürebilir)...');
@@ -361,6 +505,14 @@ class Engine {
   /// 6 dakika beklenir ve takılırsa öğrenciye ne yapacağı adım adım yazılır.
   static Future<bool> ensureDockerRunning(Log log) async {
     if (await dockerRunning()) return true;
+    if (Os.isLinux) {
+      log('✖ Docker motoru çalışmıyor.');
+      log('   → Terminalde şunu çalıştır: sudo systemctl enable --now docker');
+      log('   → "permission denied" görüyorsan kullanıcını docker grubuna ekle: '
+          'sudo usermod -aG docker \$USER  (sonra oturumu kapatıp aç).');
+      log('   → Docker kurulu değilse: https://docs.docker.com/engine/install/');
+      return false;
+    }
     log('Docker çalışmıyor, Docker Desktop açılıyor...');
     log('İlk kez açılıyorsa Docker kendini hazırlar; 2-5 dakika sürebilir, bekle.');
     await _tryStartDockerDesktop();
@@ -385,7 +537,12 @@ class Engine {
       }
     }
     log('✖ Docker 6 dakikada hazır olmadı.');
-    if (await Preflight.rebootPending()) {
+    if (Os.isMac) {
+      log('   → Docker Desktop penceresine bak: lisans sözleşmesi çıktıysa "Accept", yönetici '
+          'parolası (ağ bileşenleri için) istenirse gir, giriş ekranı çıktıysa "Skip" de.');
+      log('   → Yine de açılmazsa Docker uygulamasını Uygulamalar klasöründen elle aç, '
+          'durum çubuğundaki balina simgesi sabitlenince tekrar "Kur"a bas.');
+    } else if (await Preflight.rebootPending()) {
       log('   → Windows bir yeniden başlatma bekliyor (Docker/WSL yeni kurulduysa normaldir). '
           'Bilgisayarı yeniden başlat, sonra tekrar "Kur"a bas.');
     } else if (await Preflight.dockerUsersMissing()) {
@@ -401,6 +558,14 @@ class Engine {
   }
 
   static Future<bool> _dockerDesktopProcessAlive() async {
+    if (!Os.isWindows) {
+      try {
+        final r = await Process.run('pgrep', ['-x', 'Docker Desktop']);
+        return r.exitCode == 0;
+      } catch (_) {
+        return false;
+      }
+    }
     try {
       final r = await Process.run(
           'tasklist', ['/FI', 'IMAGENAME eq Docker Desktop.exe', '/NH']);
@@ -468,6 +633,11 @@ class Engine {
   }
 
   static Future<void> _tryStartDockerDesktop({bool restart = false}) async {
+    if (Os.isMac) {
+      await _launch('open', ['-a', 'Docker']);
+      return;
+    }
+    if (!Os.isWindows) return;
     // `docker desktop start/restart` kapanmış ya da yarım kalmış motoru da toparlar.
     try {
       await Process.start('docker', ['desktop', restart ? 'restart' : 'start'],
@@ -478,7 +648,7 @@ class Engine {
     if (restart || await _dockerDesktopProcessAlive()) return;
     final candidates = [
       r'C:\Program Files\Docker\Docker\Docker Desktop.exe',
-      '${Platform.environment['LOCALAPPDATA']}\\Programs\\Docker\\Docker\\Docker Desktop.exe',
+      '${Platform.environment['LOCALAPPDATA']}${Os.sep}Programs${Os.sep}Docker${Os.sep}Docker${Os.sep}Docker Desktop.exe',
     ];
     for (final c in candidates) {
       if (await File(c).exists()) {
@@ -510,7 +680,7 @@ class Engine {
   /// Portalı (htdocs/index.php) yazar. Yoksa veya MF Lab'a ait eski bir sürümse güncellenir;
   /// öğrencinin kendi yazdığı bir ana sayfa varsa dokunulmaz.
   static Future<void> _writePortal(String ws) async {
-    final f = File('$ws\\index.php');
+    final f = File('$ws${Os.sep}index.php');
     if (await f.exists()) {
       final cur = await f.readAsString();
       final m = RegExp(r'mflab-portal:(\d+)').firstMatch(cur);
@@ -532,7 +702,7 @@ class Engine {
     } else if (c.workspaceName == 'proje') {
       // Boş çalışma alanında öğrenciye hazır bir ilk proje aç.
       if (await Directory(ws).list().isEmpty) {
-        await writeWebProject('$ws\\ilk-proje', 'ilk-proje');
+        await writeWebProject('$ws${Os.sep}ilk-proje', 'ilk-proje');
       }
     }
   }
@@ -540,7 +710,7 @@ class Engine {
   /// HTML/CSS/JS başlangıç projesi: index.html, style.css, script.js ve açıklamalı README.
   static Future<void> writeWebProject(String dir, String name) async {
     await Directory(dir).create(recursive: true);
-    await File('$dir\\index.html').writeAsString('''<!DOCTYPE html>
+    await File('$dir${Os.sep}index.html').writeAsString('''<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
@@ -563,7 +733,7 @@ class Engine {
 </body>
 </html>
 ''');
-    await File('$dir\\style.css').writeAsString('''body {
+    await File('$dir${Os.sep}style.css').writeAsString('''body {
   font-family: "Segoe UI", Arial, sans-serif;
   max-width: 720px;
   margin: 40px auto;
@@ -587,7 +757,7 @@ button {
   cursor: pointer;
 }
 ''');
-    await File('$dir\\script.js').writeAsString('''// Sayfa yüklenince çalışır.
+    await File('$dir${Os.sep}script.js').writeAsString('''// Sayfa yüklenince çalışır.
 document.getElementById("selam").addEventListener("click", () => {
   document.getElementById("mesaj").textContent = "Merhaba! JavaScript çalışıyor 🎉";
 });
@@ -599,7 +769,7 @@ document.getElementById("selam").addEventListener("click", () => {
         .replaceAll('{{PATH}}', dir)
         .replaceAll('{{DATE}}',
             '${two(d.day)}.${two(d.month)}.${d.year} ${two(d.hour)}:${two(d.minute)}');
-    await File('$dir\\README.md').writeAsString(readme);
+    await File('$dir${Os.sep}README.md').writeAsString(readme);
   }
 
   // ----------------------------------------------------------- projects & assignments
@@ -615,12 +785,12 @@ document.getElementById("selam").addEventListener("click", () => {
           final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
           if (name.startsWith('.')) continue;
           final stat = await entity.stat();
-          final isLaravel = await File('${entity.path}\\public\\index.php').exists();
+          final isLaravel = await File('${entity.path}${Os.sep}public${Os.sep}index.php').exists();
           var entry = isLaravel ? 'public/' : '';
           if (!isLaravel) {
             var hasIndex = false;
             for (final n in ['index.php', 'index.html', 'index.htm']) {
-              if (await File('${entity.path}\\$n').exists()) hasIndex = true;
+              if (await File('${entity.path}${Os.sep}$n').exists()) hasIndex = true;
             }
             if (!hasIndex) {
               await for (final e in entity.list(followLinks: false)) {
@@ -657,7 +827,7 @@ document.getElementById("selam").addEventListener("click", () => {
     final clean = projectName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_').trim();
     if (clean.isEmpty) throw ArgumentError('Geçersiz proje adı');
     final ws = workspaceDir(course);
-    final targetDir = Directory('$ws\\$clean');
+    final targetDir = Directory('$ws${Os.sep}$clean');
     if (await targetDir.exists()) {
       throw StateError('"$clean" adında bir proje zaten var.');
     }
@@ -668,7 +838,7 @@ document.getElementById("selam").addEventListener("click", () => {
       log('✔ "$clean" projesi oluşturuldu.');
       return targetDir.path;
     } else if (template == 'crud') {
-      final f = File('${targetDir.path}\\index.php');
+      final f = File('${targetDir.path}${Os.sep}index.php');
       await f.writeAsString(r'''<?php
 // MF Lab - Veritabanı (CRUD) Başlangıç Şablonu
 $host = 'db';
@@ -739,7 +909,7 @@ try {
     } else if (template == 'laravel') {
       log('Laravel projesi kuruluyor (birkaç dakika sürebilir)...');
       await targetDir.delete();
-      final stack = '${courseDir(course)}\\.stack\\web2-stack';
+      final stack = '${courseDir(course)}${Os.sep}.stack${Os.sep}web2-stack';
       final (code, out) = await stream(
         'docker',
         ['compose', 'exec', '-T', 'web', 'composer', 'create-project', 'laravel/laravel', clean],
@@ -751,7 +921,7 @@ try {
         throw StateError('Laravel kurulumu başarısız.');
       }
     } else {
-      final f = File('${targetDir.path}\\index.php');
+      final f = File('${targetDir.path}${Os.sep}index.php');
       await f.writeAsString('''<?php
 // MF Lab - $clean
 ?>
@@ -779,7 +949,7 @@ try {
     }
 
     if (template != 'laravel') {
-      await File('${targetDir.path}\\README.md')
+      await File('${targetDir.path}${Os.sep}README.md')
           .writeAsString(await renderReadme(clean));
     }
 
@@ -798,21 +968,21 @@ try {
     log('\n=== 📦 Ödev Paketleme Başlatılıyor ===');
     final ws = workspaceDir(course);
     final sourcePath = (subprojectName != null && subprojectName.isNotEmpty)
-        ? '$ws\\$subprojectName'
+        ? '$ws${Os.sep}$subprojectName'
         : ws;
 
     if (!await Directory(sourcePath).exists()) {
       throw StateError('Paketlenecek klasör bulunamadı: $sourcePath');
     }
 
-    final tempDump = File('${Directory.systemTemp.path}\\mflab_dump.sql');
+    final tempDump = File('${Directory.systemTemp.path}${Os.sep}mflab_dump.sql');
     if (await tempDump.exists()) {
       try { await tempDump.delete(); } catch (_) {}
     }
 
     try {
-      final stack = '${courseDir(course)}\\.stack\\web2-stack';
-      final vtysStack = '${courseDir(course)}\\.stack\\vtys-stack';
+      final stack = '${courseDir(course)}${Os.sep}.stack${Os.sep}web2-stack';
+      final vtysStack = '${courseDir(course)}${Os.sep}.stack${Os.sep}vtys-stack';
       final targetStack = (await Directory(stack).exists()) ? stack : vtysStack;
 
       if (await Directory(targetStack).exists()) {
@@ -837,6 +1007,34 @@ try {
         : course.id;
     final zipBaseName = '${cleanName}_${cleanNo.isEmpty ? '' : '${cleanNo}_'}${targetLabel}_Odev.zip';
 
+    if (!Os.isWindows) {
+      final outZip = '${await desktopDir()}${Os.sep}$zipBaseName';
+      final stage = Directory(
+          '${Directory.systemTemp.path}${Os.sep}mflab_zip_${DateTime.now().millisecondsSinceEpoch}');
+      try {
+        await copyDir(Directory(sourcePath), stage,
+            exclude: {'vendor', 'node_modules', '.git'});
+        if (await tempDump.exists()) {
+          await tempDump.copy('${stage.path}${Os.sep}veritabani.sql');
+        }
+        if (!await zipDirPosix(stage.path, outZip)) {
+          log('✖ ZIP oluşturulamadı. "zip" komutu kurulu mu? (Linux: sudo apt install zip)');
+          throw StateError('Paketleme başarısız oldu.');
+        }
+      } finally {
+        try {
+          await stage.delete(recursive: true);
+        } catch (_) {}
+        if (await tempDump.exists()) {
+          try { await tempDump.delete(); } catch (_) {}
+        }
+      }
+      log('✔ Ödev paketi başarıyla Masaüstünüze oluşturuldu:');
+      log('  $outZip');
+      await revealFile(outZip);
+      return outZip;
+    }
+
     final script = StringBuffer()
       ..writeln(r"$desktop = [Environment]::GetFolderPath('Desktop')")
       ..writeln("\$outZip = Join-Path \$desktop '${_ps(zipBaseName)}'")
@@ -848,7 +1046,7 @@ try {
       ..writeln(r'Compress-Archive -Path $paths -DestinationPath $outZip -Force')
       ..writeln(r'Write-Output $outZip');
 
-    final tmpScript = File('${Directory.systemTemp.path}\\mflab_zip.ps1');
+    final tmpScript = File('${Directory.systemTemp.path}${Os.sep}mflab_zip.ps1');
     await tmpScript.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(script.toString())]);
 
     final r = await run('powershell', [
@@ -872,9 +1070,7 @@ try {
     log('✔ Ödev paketi başarıyla Masaüstünüze oluşturuldu:');
     log('  $outZipPath');
 
-    try {
-      await Process.start('explorer.exe', ['/select,', outZipPath], runInShell: true);
-    } catch (_) {}
+    await revealFile(outZipPath);
 
     return outZipPath;
   }
@@ -886,8 +1082,8 @@ try {
     required Log log,
   }) async {
     log('\n=== 🗄️ Örnek Veritabanı Yükleniyor ($sampleKey) ===');
-    final stack = '${courseDir(course)}\\.stack\\web2-stack';
-    final vtysStack = '${courseDir(course)}\\.stack\\vtys-stack';
+    final stack = '${courseDir(course)}${Os.sep}.stack${Os.sep}web2-stack';
+    final vtysStack = '${courseDir(course)}${Os.sep}.stack${Os.sep}vtys-stack';
     final targetStack = (await Directory(stack).exists()) ? stack : vtysStack;
 
     String sql;
@@ -984,22 +1180,21 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
 ''';
     }
 
-    final tmpSql = File('${Directory.systemTemp.path}\\sample_init.sql');
+    final tmpSql = File('${Directory.systemTemp.path}${Os.sep}sample_init.sql');
     await tmpSql.writeAsString(sql);
 
-    final r = await run('powershell', [
-      '-NoProfile',
-      '-Command',
-      "Get-Content '${tmpSql.path}' | docker compose exec -T db mariadb -u root -proot mflab"
-    ], cwd: targetStack);
+    final (code, err) = await dockerFromFile(
+        ['compose', 'exec', '-T', 'db', 'mariadb', '-u', 'root', '-proot', 'mflab'],
+        targetStack,
+        tmpSql);
 
     try { await tmpSql.delete(); } catch (_) {}
 
-    if (r.exitCode == 0) {
+    if (code == 0) {
       log('✔ "$dbName" tabloları ve örnek verileri "mflab" veritabanına başarıyla yüklendi.');
       log('phpMyAdmin üzerinden (http://localhost:${effectivePort(6381)}) tabloları inceleyebilirsiniz.');
     } else {
-      log('✖ Veritabanı aktarımı başarısız oldu: ${r.stderr}');
+      log('✖ Veritabanı aktarımı başarısız oldu: $err');
     }
   }
 
@@ -1041,14 +1236,14 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
 
   static Future<bool> isRunning(Course c, LabPackage p) async {
     final dir = stackDir(c, p);
-    if (!await File('$dir\\compose.yml').exists()) return false;
+    if (!await File('$dir${Os.sep}compose.yml').exists()) return false;
     final r = await run('docker', ['compose', 'ps', '--status', 'running', '-q'],
         cwd: dir);
     return r.exitCode == 0 && (r.stdout as String).trim().isNotEmpty;
   }
 
   static Future<bool> isInstalled(Course c, LabPackage p) async =>
-      File('${stackDir(c, p)}\\compose.yml').exists();
+      File('${stackDir(c, p)}${Os.sep}compose.yml').exists();
 
   static Future<void> start(Course c, LabPackage p, Log log) async {
     if (c.workspaceName == 'htdocs') {
@@ -1094,13 +1289,22 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
 
   /// Masaüstündeki `MF Lab - ders adı` kısayol klasörünü siler.
   static Future<void> removeDesktopShortcuts(Course course, Log log) async {
+    if (!Os.isWindows) {
+      try {
+        final dir = Directory(
+            '${await desktopDir()}${Os.sep}MF Lab - ${course.name}');
+        if (await dir.exists()) await dir.delete(recursive: true);
+        log('✔ Masaüstündeki "${course.name}" kısayolları temizlendi.');
+      } catch (_) {}
+      return;
+    }
     final sb = StringBuffer()
       ..writeln(r"$desktop = [Environment]::GetFolderPath('Desktop')")
       ..writeln(
           "\$dir = Join-Path \$desktop '${_ps('MF Lab - ${course.name}')}'")
       ..writeln(r'if (Test-Path $dir) { Remove-Item -Recurse -Force $dir }');
 
-    final tmp = File('${Directory.systemTemp.path}\\mflab_rm_shortcuts.ps1');
+    final tmp = File('${Directory.systemTemp.path}${Os.sep}mflab_rm_shortcuts.ps1');
     await tmp.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(sb.toString())]);
     final r = await run('powershell', [
       '-NoProfile',
@@ -1189,9 +1393,15 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
   static String _ps(String s) => s.replaceAll("'", "''");
 
   static Future<String> _ensureIcon() async {
-    final path = '${AppConfig.baseDir}\\mflab.ico';
     await Directory(AppConfig.baseDir).create(recursive: true);
-    final data = await rootBundle.load('assets/images/app_icon.ico');
+    if (Os.isWindows) {
+      final path = '${AppConfig.baseDir}${Os.sep}mflab.ico';
+      final data = await rootBundle.load('assets/images/app_icon.ico');
+      await File(path).writeAsBytes(data.buffer.asUint8List());
+      return path;
+    }
+    final path = '${AppConfig.baseDir}${Os.sep}mflab.png';
+    final data = await rootBundle.load('assets/images/logo.png');
     await File(path).writeAsBytes(data.buffer.asUint8List());
     return path;
   }
@@ -1199,6 +1409,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
   /// Masaüstünde `MF Lab - ders adı` klasörü ve içinde kısayollar oluşturur.
   static Future<void> createShortcuts(
       Course course, List<LabPackage> pkgs, Log log) async {
+    if (!Os.isWindows) return _createShortcutsPosix(course, pkgs, log);
     final icon = await _ensureIcon();
     final ws = workspaceDir(course);
     await Directory(ws).create(recursive: true);
@@ -1252,7 +1463,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
       'GitHub         : ${_ps(AppConfig.repoUrl)}',
       '',
       'Çalışma Alanı  : ${_ps(ws)}',
-      'Konteyner Dizini: ${_ps(courseDir(course))}\\.stack',
+      'Konteyner Dizini: ${_ps(courseDir(course))}${Os.sep}.stack',
       '',
       'HIZLI ERİŞİM & KULLANIM:',
       '1. "VS Code ile aç" kısayolu ile projeyi kodlamaya başlayabilirsin.',
@@ -1266,7 +1477,7 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
         "Set-Content -Path (Join-Path \$dir 'MF_LAB_BILGI.txt') -Value \"$infoText\" -Encoding UTF8");
 
     try {
-      final infoCourse = File('${courseDir(course)}\\MF_LAB_BILGI.txt');
+      final infoCourse = File('${courseDir(course)}${Os.sep}MF_LAB_BILGI.txt');
       await infoCourse.writeAsString('''============================================================
   MF Lab - Ders ve Çalışma Ortamı Bilgisi
 ============================================================
@@ -1280,7 +1491,7 @@ GitHub         : ${AppConfig.repoUrl}
 ''');
     } catch (_) {}
 
-    final tmp = File('${Directory.systemTemp.path}\\mflab_shortcuts.ps1');
+    final tmp = File('${Directory.systemTemp.path}${Os.sep}mflab_shortcuts.ps1');
     await tmp.writeAsBytes([0xEF, 0xBB, 0xBF, ...utf8.encode(sb.toString())]);
     final r = await run('powershell', [
       '-NoProfile',
@@ -1292,6 +1503,58 @@ GitHub         : ${AppConfig.repoUrl}
     log(r.exitCode == 0
         ? '✔ Masaüstüne "MF Lab - ${course.name}" klasörü ve kısayollar eklendi.'
         : '✖ Kısayollar oluşturulamadı: ${r.stderr}');
+  }
+
+  /// macOS / Linux: masaüstüne `MF Lab - ders adı` klasörü; içinde çalışma klasörü bağlantısı,
+  /// tarayıcı bağlantıları ve bilgi dosyası. (Windows'taki .lnk/.url karşılığı.)
+  static Future<void> _createShortcutsPosix(
+      Course course, List<LabPackage> pkgs, Log log) async {
+    try {
+      final icon = await _ensureIcon();
+      final ws = workspaceDir(course);
+      await Directory(ws).create(recursive: true);
+      final desktop = await desktopDir();
+      final dir = Directory('$desktop${Os.sep}MF Lab - ${course.name}');
+      await dir.create(recursive: true);
+
+      final link = Link('${dir.path}${Os.sep}${course.workspaceName} klasörü');
+      if (!await link.exists()) await link.create(ws);
+
+      for (final p in pkgs) {
+        for (final l in p.links) {
+          final url = mapText(course.id, p.id, l.url);
+          if (Os.isMac) {
+            await File('${dir.path}${Os.sep}${l.name}.webloc').writeAsString(
+                '<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+                '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+                '<plist version="1.0"><dict><key>URL</key><string>$url</string>'
+                '</dict></plist>\n');
+          } else {
+            final f = File('${dir.path}${Os.sep}${l.name}.desktop');
+            await f.writeAsString('[Desktop Entry]\nType=Link\nName=${l.name}\n'
+                'URL=$url\nIcon=$icon\n');
+            await Process.run('chmod', ['+x', f.path]);
+          }
+        }
+      }
+
+      await File('${dir.path}${Os.sep}MF_LAB_BILGI.txt').writeAsString(
+          'MF Lab - Ders ve Çalışma Ortamı Bilgisi\n'
+          '============================================================\n'
+          'Ders           : ${course.name} (${course.id})\n'
+          'MF Lab Sürümü  : v${AppConfig.appVersion}\n'
+          'Kurulum Tarihi : ${DateTime.now().toString().split('.').first}\n'
+          'Geliştirici    : ${AppConfig.author}\n'
+          'GitHub         : ${AppConfig.repoUrl}\n'
+          'Çalışma Alanı  : $ws\n'
+          'Konteyner Dizini: ${courseDir(course)}${Os.sep}.stack\n');
+      await File('${courseDir(course)}${Os.sep}MF_LAB_BILGI.txt').writeAsString(
+          'MF Lab - ${course.name}\nÇalışma Alanı: $ws\n');
+      log('✔ Masaüstüne "MF Lab - ${course.name}" klasörü ve kısayollar eklendi.');
+    } catch (e) {
+      log('✖ Kısayollar oluşturulamadı: $e');
+    }
   }
 
   // ----------------------------------------------------------------- advanced features
@@ -1314,7 +1577,7 @@ GitHub         : ${AppConfig.repoUrl}
 
   /// "dersId/paketId" -> {orijinal port -> kullanılan port}. Yalnızca çakışma olan portlar yer alır.
   static final Map<String, Map<int, int>> _portMaps = {};
-  static String get _portMapFile => '${AppConfig.baseDir}\\ports.json';
+  static String get _portMapFile => '${AppConfig.baseDir}${Os.sep}ports.json';
 
   static Future<void> loadPortMaps() async {
     _portMaps.clear();
@@ -1398,6 +1661,14 @@ GitHub         : ${AppConfig.repoUrl}
   static Future<String> describePortUsers(int port) async {
     final found = <String>[];
     try {
+      if (!Os.isWindows) {
+        final r = await run('lsof', ['-nP', '-iTCP:$port', '-sTCP:LISTEN', '-Fc']);
+        found.addAll((r.stdout as String)
+            .split('\n')
+            .where((e) => e.startsWith('c'))
+            .map((e) => e.substring(1).trim())
+            .toSet());
+      } else {
       final r = await run('powershell', [
         '-NoProfile',
         '-Command',
@@ -1409,6 +1680,7 @@ GitHub         : ${AppConfig.repoUrl}
           .split('\n')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty));
+      }
     } catch (_) {}
     try {
       final r = await run(
@@ -1422,11 +1694,43 @@ GitHub         : ${AppConfig.repoUrl}
         : found.join(', ');
   }
 
-  /// Konteyner içinde etkileşimli terminal (bash / sh) penceresi açar.
   static Future<void> openContainerTerminal(
       Course course, LabPackage pkg, {String service = 'web'}) async {
     final stack = stackDir(course, pkg);
-    final compose = '$stack\\compose.yml';
+    final compose = '$stack${Os.sep}compose.yml';
+    if (!Os.isWindows) {
+      final sh = 'echo "MF Lab: ${pkg.name} ($service). Çıkmak için: exit"; '
+          'docker compose -f "$compose" exec -it $service bash || '
+          'docker compose -f "$compose" exec -it $service sh; exec \$SHELL';
+      if (Os.isMac) {
+        final esc = sh.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+        await _launch('osascript', [
+          '-e',
+          'tell application "Terminal" to activate',
+          '-e',
+          'tell application "Terminal" to do script "$esc"',
+        ]);
+        return;
+      }
+      for (final t in [
+        ['x-terminal-emulator', '-e'],
+        ['gnome-terminal', '--'],
+        ['konsole', '-e'],
+        ['xfce4-terminal', '-e'],
+        ['xterm', '-e'],
+      ]) {
+        if (_exe(t[0]) == t[0] && !File(t[0]).existsSync()) {
+          // PATH'te bulunamadıysa sıradakini dene
+          final found = (_env?['PATH'] ?? '')
+              .split(':')
+              .any((d) => File('$d/${t[0]}').existsSync());
+          if (!found) continue;
+        }
+        await _launch(t[0], [...t.skip(1), 'bash', '-lc', sh]);
+        return;
+      }
+      return;
+    }
     final script = 'Write-Host "==============================================" -ForegroundColor Cyan; '
         'Write-Host "  MF Lab: ${pkg.name} - ($service)" -ForegroundColor Yellow; '
         'Write-Host "  Konteyner ici calisma dizini: /var/www/html veya /" -ForegroundColor Gray; '
@@ -1445,12 +1749,36 @@ GitHub         : ${AppConfig.repoUrl}
     ], runInShell: true, environment: _env);
   }
 
-  /// Windows dosya seçici penceresi açar (OpenFileDialog).
   static Future<String?> pickFile({
     required String title,
     required String filterName,
     required String extension,
   }) async {
+    if (!Os.isWindows) {
+      try {
+        if (Os.isMac) {
+          final r = await run('osascript', [
+            '-e',
+            'POSIX path of (choose file with prompt "${title.replaceAll('"', '')}")'
+          ]);
+          final p = (r.stdout as String).trim();
+          return r.exitCode == 0 && p.isNotEmpty ? p : null;
+        }
+        for (final cmd in [
+          ['zenity', '--file-selection', '--title=$title'],
+          ['kdialog', '--getopenfilename', Os.home, '*.$extension'],
+        ]) {
+          final found = (_env?['PATH'] ?? Platform.environment['PATH'] ?? '')
+              .split(':')
+              .any((d) => File('$d/${cmd[0]}').existsSync());
+          if (!found) continue;
+          final r = await run(cmd[0], cmd.skip(1).toList());
+          final p = (r.stdout as String).trim();
+          return r.exitCode == 0 && p.isNotEmpty ? p : null;
+        }
+      } catch (_) {}
+      return null;
+    }
     final cmd = 'Add-Type -AssemblyName System.Windows.Forms; '
         '\$f = New-Object System.Windows.Forms.OpenFileDialog; '
         '\$f.Title = "${_ps(title)}"; '
@@ -1464,57 +1792,48 @@ GitHub         : ${AppConfig.repoUrl}
     return null;
   }
 
-  /// Veritabanı yedeğini masaüstüne .sql dosyası olarak aktarır.
   static Future<String?> backupDatabase(Course c, LabPackage p, Log log) async {
     final stack = stackDir(c, p);
     final now = DateTime.now();
     final timeStr = '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
     final fileName = 'mflab_${c.id}_yedek_$timeStr.sql';
 
-    final rDesk = await run('powershell', ['-NoProfile', '-Command', r"[Environment]::GetFolderPath('Desktop')"]);
-    final desktop = (rDesk.stdout as String).trim();
-    final outPath = '$desktop\\$fileName';
+    final desktop = await desktopDir();
+    final outPath = '$desktop${Os.sep}$fileName';
 
     log('\n=== Veritabanı Yedeği Alınıyor ===');
     log('Hedef dosya: $outPath');
 
-    String dumpCmd;
-    if (p.id == 'web2-stack') {
-      dumpCmd = 'docker compose -f "$stack\\compose.yml" exec -T db mariadb-dump -uroot -proot --all-databases > "${outPath.replaceAll('\\', '/')}"';
-    } else {
-      dumpCmd = 'docker compose -f "$stack\\compose.yml" exec -T postgres pg_dumpall -U postgres > "${outPath.replaceAll('\\', '/')}"';
-    }
+    final args = p.id == 'web2-stack'
+        ? ['compose', 'exec', '-T', 'db', 'mariadb-dump', '-uroot', '-proot', '--all-databases']
+        : ['compose', 'exec', '-T', 'postgres', 'pg_dumpall', '-U', 'postgres'];
 
-    final r = await run('cmd', ['/c', dumpCmd]);
-    if (r.exitCode == 0 && await File(outPath).exists()) {
+    if (await dockerToFile(args, stack, File(outPath)) &&
+        await File(outPath).exists()) {
       log('✔ Veritabanı yedeği masaüstüne kaydedildi: $fileName');
       return outPath;
     } else {
-      log('✖ Yedek alınamadı: ${r.stderr}');
+      log('✖ Yedek alınamadı. Servis çalışıyor mu kontrol et.');
       return null;
     }
   }
 
-  /// Bilgisayardan seçilen bir .sql dosyasını veritabanına aktarır.
   static Future<bool> importDatabase(
       Course c, LabPackage p, String sqlFilePath, Log log) async {
     log('\n=== Veritabanı İçe Aktarılıyor ===');
     log('Kaynak dosya: $sqlFilePath');
     final stack = stackDir(c, p);
 
-    String importCmd;
-    if (p.id == 'web2-stack') {
-      importCmd = 'type "${sqlFilePath.replaceAll('/', '\\')}" | docker compose -f "$stack\\compose.yml" exec -T db mariadb -uroot -proot mflab';
-    } else {
-      importCmd = 'type "${sqlFilePath.replaceAll('/', '\\')}" | docker compose -f "$stack\\compose.yml" exec -T postgres psql -U postgres postgres';
-    }
+    final args = p.id == 'web2-stack'
+        ? ['compose', 'exec', '-T', 'db', 'mariadb', '-uroot', '-proot', 'mflab']
+        : ['compose', 'exec', '-T', 'postgres', 'psql', '-U', 'postgres', 'postgres'];
 
-    final r = await run('cmd', ['/c', importCmd]);
-    if (r.exitCode == 0) {
+    final (code, err) = await dockerFromFile(args, stack, File(sqlFilePath));
+    if (code == 0) {
       log('✔ .sql dosyası veritabanına başarıyla aktarıldı.');
       return true;
     } else {
-      log('✖ İçe aktarma sırasında hata oluştu: ${r.stderr}');
+      log('✖ İçe aktarma sırasında hata oluştu: $err');
       return false;
     }
   }
@@ -1536,16 +1855,15 @@ GitHub         : ${AppConfig.repoUrl}
         : '';
     final zipName = '${cleanNo}_${cleanName}_${course.id}$cleanSub.zip';
 
-    final rDesk = await run('powershell', ['-NoProfile', '-Command', r"[Environment]::GetFolderPath('Desktop')"]);
-    final desktop = (rDesk.stdout as String).trim();
-    final outZip = '$desktop\\$zipName';
+    final desktop = await desktopDir();
+    final outZip = '$desktop${Os.sep}$zipName';
 
-    final tempDir = Directory('${Directory.systemTemp.path}\\mflab_hw_${DateTime.now().millisecondsSinceEpoch}');
+    final tempDir = Directory('${Directory.systemTemp.path}${Os.sep}mflab_hw_${DateTime.now().millisecondsSinceEpoch}');
     await tempDir.create(recursive: true);
 
     try {
       // 1. Öğrenci bilgi dosyası
-      final infoFile = File('${tempDir.path}\\OGRENCI_BILGI.txt');
+      final infoFile = File('${tempDir.path}${Os.sep}OGRENCI_BILGI.txt');
       await infoFile.writeAsString(
         'MF Lab - Odev Teslim Raporu\n'
         '====================================\n'
@@ -1560,13 +1878,17 @@ GitHub         : ${AppConfig.repoUrl}
       // 2. Kod klasörünü kopyala
       final ws = Directory(workspaceDir(course));
       final sourceDir = (subprojectName != null && subprojectName.isNotEmpty)
-          ? Directory('${ws.path}\\$subprojectName')
+          ? Directory('${ws.path}${Os.sep}$subprojectName')
           : ws;
       if (await sourceDir.exists()) {
         log('Proje kodları kopyalanıyor (${subprojectName ?? "Tüm Projeler"})...');
-        final copyScript = 'Copy-Item -Path "${_ps(sourceDir.path)}\\*" -Destination "${_ps(tempDir.path)}\\kodlar" -Recurse -Force';
-        await Directory('${tempDir.path}\\kodlar').create(recursive: true);
+        if (!Os.isWindows) {
+          await copyDir(sourceDir, Directory('${tempDir.path}${Os.sep}kodlar'));
+        } else {
+        final copyScript = 'Copy-Item -Path "${_ps(sourceDir.path)}${Os.sep}*" -Destination "${_ps(tempDir.path)}${Os.sep}kodlar" -Recurse -Force';
+        await Directory('${tempDir.path}${Os.sep}kodlar').create(recursive: true);
         await run('powershell', ['-NoProfile', '-Command', copyScript]);
+        }
       }
 
       // 3. Veritabanı varsa yedeğini al
@@ -1576,26 +1898,35 @@ GitHub         : ${AppConfig.repoUrl}
           final isUp = await isRunning(course, p);
           if (isUp) {
             log('Veritabanı yedeği pakete ekleniyor...');
-            final sqlFile = '${tempDir.path}\\veritabani.sql';
+            final sqlFile = '${tempDir.path}${Os.sep}veritabani.sql';
             final stack = stackDir(course, p);
-            String dumpCmd = p.id == 'web2-stack'
-                ? 'docker compose -f "$stack\\compose.yml" exec -T db mariadb-dump -uroot -proot --all-databases > "${sqlFile.replaceAll('\\', '/')}"'
-                : 'docker compose -f "$stack\\compose.yml" exec -T postgres pg_dumpall -U postgres > "${sqlFile.replaceAll('\\', '/')}"';
-            await run('cmd', ['/c', dumpCmd]);
+            await dockerToFile(
+                p.id == 'web2-stack'
+                    ? ['compose', 'exec', '-T', 'db', 'mariadb-dump', '-uroot', '-proot', '--all-databases']
+                    : ['compose', 'exec', '-T', 'postgres', 'pg_dumpall', '-U', 'postgres'],
+                stack,
+                File(sqlFile));
           }
         }
       }
 
       // 4. Zip oluştur
       log('Zip arşivi oluşturuluyor...');
+      if (!Os.isWindows) {
+        if (await zipDirPosix(tempDir.path, outZip)) {
+          log('🎉 Ödev paketi masaüstünde hazır: $zipName');
+          await revealFile(outZip);
+          return outZip;
+        }
+        log('✖ Zip oluşturulamadı. "zip" komutu kurulu mu? (Linux: sudo apt install zip)');
+        return null;
+      }
       final zipScript = 'if (Test-Path "${_ps(outZip)}") { Remove-Item -Force "${_ps(outZip)}" }; '
-          'Compress-Archive -Path "${_ps(tempDir.path)}\\*" -DestinationPath "${_ps(outZip)}" -Force';
+          'Compress-Archive -Path "${_ps(tempDir.path)}${Os.sep}*" -DestinationPath "${_ps(outZip)}" -Force';
       final r = await run('powershell', ['-NoProfile', '-Command', zipScript]);
       if (r.exitCode == 0 && await File(outZip).exists()) {
         log('🎉 Ödev paketi masaüstünde hazır: $zipName');
-        try {
-          await Process.start('explorer.exe', ['/select,', outZip], runInShell: true);
-        } catch (_) {}
+        await revealFile(outZip);
         return outZip;
       } else {
         log('✖ Zip oluşturulamadı: ${r.stderr}');
