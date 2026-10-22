@@ -477,13 +477,8 @@ class Engine {
             jsonEncode(portMap.map((k, v) => MapEntry('$k', v))));
       } catch (_) {}
     }
-    if (portMap.isNotEmpty) {
-      var text = await rootBundle.loadString(p.compose!);
-      portMap.forEach((from, to) {
-        text = text.replaceAll('"$from:', '"$to:');
-      });
-      await File('$stack${Os.sep}compose.yml').writeAsString(text);
-    }
+    await File('$stack${Os.sep}compose.yml')
+        .writeAsString(await _composeText(p, portMap));
 
     log('Konteynerler indiriliyor ve başlatılıyor (ilk seferde birkaç dakika sürebilir)...');
     var (code, out) =
@@ -1255,12 +1250,28 @@ INSERT INTO notlar (ogrenci_id, ders_adi, vize, final) VALUES
   static Future<bool> isInstalled(Course c, LabPackage p) async =>
       File('${stackDir(c, p)}${Os.sep}compose.yml').exists();
 
+  /// Paketin compose dosyası; çakışan portlar [portMap]'e göre değiştirilir. Tüm portlar yalnızca
+  /// 127.0.0.1'e bağlanır: veritabanı şifreleri (root/root) ve oturumsuz yönetim ekranları
+  /// aynı ağdaki başkalarına açılmasın.
+  static Future<String> _composeText(LabPackage p, Map<int, int> portMap) async {
+    var text = await rootBundle.loadString(p.compose!);
+    portMap.forEach((from, to) {
+      text = text.replaceAll('"127.0.0.1:$from:', '"127.0.0.1:$to:');
+    });
+    return text;
+  }
+
   static Future<void> start(Course c, LabPackage p, Log log) async {
     if (c.workspaceName == 'htdocs') {
       try {
         await _writePortal(workspaceDir(c));
       } catch (_) {}
     }
+    // Eski sürümle kurulmuş yığınların compose dosyası da güvenli sürüme yükseltilir.
+    try {
+      await File('${stackDir(c, p)}${Os.sep}compose.yml').writeAsString(
+          await _composeText(p, _portMaps['${c.id}/${p.id}'] ?? const {}));
+    } catch (_) {}
     await stream('docker', ['compose', 'up', '-d'],
         cwd: stackDir(c, p), log: log);
     if (p.buildContext != null) await ensurePatchedPhp(c, p, log);

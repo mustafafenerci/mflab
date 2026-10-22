@@ -291,6 +291,16 @@ void main() {
     expect(Engine.versionAtLeast('8.3.36-dev', Engine.minPhpVersion), isTrue);
   });
 
+  test('compose dosyalarındaki tüm portlar yalnızca 127.0.0.1\'e bağlanır', () {
+    for (final f in ['assets/compose/web2.yml', 'assets/compose/vtys.yml']) {
+      final lines = File(f).readAsLinesSync().where((l) => l.contains('ports:'));
+      expect(lines, isNotEmpty);
+      for (final l in lines) {
+        expect(l, contains('"127.0.0.1:'), reason: '$f: $l');
+      }
+    }
+  });
+
   group('Platform katmanı', () {
     test('kök klasör ve yol ayracı işletim sistemine uyar', () {
       if (Platform.isWindows) {

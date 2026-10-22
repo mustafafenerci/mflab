@@ -18,12 +18,15 @@ $repo = "mustafafenerci/mflab"
 # Kurulum dosyasının adında sürüm var (MFLab-Setup-vX.Y.Z.exe); en güncelini GitHub'dan bul.
 $assetName = "MFLab-Setup.exe"
 $downloadUrl = "https://github.com/$repo/releases/latest/download/$assetName"
+$checksumUrl = $null
 try {
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest" -Headers @{ "User-Agent" = "MFLab-Installer" }
     $asset = $release.assets | Where-Object { $_.name -like "MFLab-Setup-v*.exe" } | Select-Object -First 1
     if ($asset) {
         $assetName = $asset.name
         $downloadUrl = $asset.browser_download_url
+        $sumAsset = $release.assets | Where-Object { $_.name -eq "$($asset.name).sha256" } | Select-Object -First 1
+        if ($sumAsset) { $checksumUrl = $sumAsset.browser_download_url }
     }
 } catch { }
 $tempFile = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), $assetName)
@@ -40,6 +43,25 @@ try {
     Write-Host "✖ İndirme sırasında bir hata oluştu: $_" -ForegroundColor Red
     Write-Host "Lütfen tarayıcınızdan şu adrese giderek manuel indirin: https://github.com/$repo/releases/latest" -ForegroundColor Yellow
     exit 1
+}
+
+# İndirilen dosyanın GitHub'daki SHA-256 özetiyle aynı olduğunu doğrula.
+if ($checksumUrl) {
+    try {
+        $expected = ([regex]::Match((Invoke-RestMethod -Uri $checksumUrl), '[a-fA-F0-9]{64}')).Value.ToLower()
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $fs = [System.IO.File]::OpenRead($tempFile)
+        $actual = ([System.BitConverter]::ToString($sha.ComputeHash($fs)) -replace '-', '').ToLower()
+        $fs.Close()
+        if ($expected -and $actual -ne $expected) {
+            Remove-Item -Force $tempFile -ErrorAction SilentlyContinue
+            Write-Host "✖ Dosya doğrulanamadı (SHA-256 uyuşmuyor). Kurulum durduruldu." -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "✔ SHA-256 doğrulandı." -ForegroundColor Green
+    } catch {
+        Write-Host "⚠ SHA-256 doğrulaması yapılamadı: $_" -ForegroundColor Yellow
+    }
 }
 
 Write-Host "🚀 Kurulum sihirbazı başlatılıyor..." -ForegroundColor Cyan
