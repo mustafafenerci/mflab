@@ -1902,6 +1902,8 @@ GitHub         : ${AppConfig.repoUrl}
     required String studentNumber,
     String? subprojectName,
     required Log log,
+    Future<bool> Function(Course c, LabPackage p)? isPackageRunning,
+    Future<bool> Function(List<String> args, String cwd, File out)? dumpToFile,
   }) async {
     log('\n=== 📦 Ödev Teslim Paketi Oluşturuluyor ===');
     final cleanName = studentName.trim().replaceAll(RegExp(r'\s+'), '_').replaceAll(RegExp(r'[^a-zA-Z0-9_]'), '');
@@ -1910,9 +1912,6 @@ GitHub         : ${AppConfig.repoUrl}
         ? '_${subprojectName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-]'), '_')}'
         : '';
     final zipName = '${cleanNo}_${cleanName}_${course.id}$cleanSub.zip';
-
-    final desktop = await desktopDir();
-    final outZip = '$desktop${Os.sep}$zipName';
 
     final tempDir = Directory('${Directory.systemTemp.path}${Os.sep}mflab_hw_${DateTime.now().millisecondsSinceEpoch}');
     await tempDir.create(recursive: true);
@@ -1948,23 +1947,46 @@ GitHub         : ${AppConfig.repoUrl}
       }
 
       // 3. Veritabanı varsa yedeğini al
+      final running = isPackageRunning ?? Engine.isRunning;
+      final dump = dumpToFile ?? Engine.dockerToFile;
       for (final id in course.packages) {
         final p = catalog.packages[id];
         if (p != null && p.isDocker) {
-          final isUp = await isRunning(course, p);
+          final isUp = await running(course, p);
           if (isUp) {
             log('Veritabanı yedeği pakete ekleniyor...');
-            final sqlFile = '${tempDir.path}${Os.sep}veritabani.sql';
+            final sqlFile = File('${tempDir.path}${Os.sep}veritabani.sql');
+            if (await sqlFile.exists()) {
+              try {
+                await sqlFile.delete();
+              } catch (e) {
+                log('✖ Eski veritabanı yedeği dosyası silinemedi: $e');
+                return null;
+              }
+              if (await sqlFile.exists()) {
+                log('✖ Eski veritabanı yedeği dosyası silinemedi; ödev paketi oluşturulmadı.');
+                return null;
+              }
+            }
             final stack = stackDir(course, p);
-            await dockerToFile(
+            final dumpOk = await dump(
                 p.id == 'web2-stack'
                     ? ['compose', 'exec', '-T', 'db', 'mariadb-dump', '-uroot', '-proot', '--all-databases']
                     : ['compose', 'exec', '-T', 'postgres', 'pg_dumpall', '-U', 'postgres'],
                 stack,
-                File(sqlFile));
+                sqlFile);
+            final dumpBytes = await sqlFile.exists() ? await sqlFile.length() : 0;
+            if (!dumpOk || dumpBytes == 0) {
+              log('✖ Veritabanı yedeği alınamadı; ödev paketi oluşturulmadı. '
+                  'Servisin çalıştığını kontrol edip tekrar dene.');
+              return null;
+            }
           }
         }
       }
+
+      final desktop = await desktopDir();
+      final outZip = '$desktop${Os.sep}$zipName';
 
       // 4. Zip oluştur
       log('Zip arşivi oluşturuluyor...');
